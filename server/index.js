@@ -17,19 +17,23 @@ try {
   db.prepare('UPDATE tuition_schedule SET monthly_rate = ROUND(annual_rate / 10.0, 2), quarterly_rate = ROUND(annual_rate / 4.0, 2)').run();
 }
 
-// Ensure fee_types are seeded for existing databases
-const feeTypeCount = db.prepare('SELECT COUNT(*) as count FROM fee_types').get().count;
-if (feeTypeCount === 0) {
-  const defaultFeeTypes = [
-    ['Tuition Fee', 1, 0], ['Misc. Fee', 0, 1], ['Laboratory Fee', 0, 2], ['Library Fee', 0, 3],
-    ['Athletic Fee', 0, 4], ['ID Fee', 0, 5], ['Insurance Fee', 0, 6], ['Development Fee', 0, 7],
-    ['Energy Fee', 0, 8], ['Internet Fee', 0, 9], ['Registration Fee', 0, 10], ['Graduation Fee', 0, 11],
+// Ensure fee_types are seeded for existing databases and add missing types
+{
+  const desiredFeeTypes = [
+    ['Tuition Fee', 1, 0], ['Misc. Fee', 0, 1], ['Book Fee', 0, 2], ['Uniform Fee', 0, 3],
+    ['PE Uniform', 0, 4], ['Graduation Fee', 0, 5], ['Laboratory Fee', 0, 6], ['Library Fee', 0, 7],
+    ['Athletic Fee', 0, 8], ['ID Fee', 0, 9], ['Insurance Fee', 0, 10], ['Development Fee', 0, 11],
+    ['Energy Fee', 0, 12], ['Internet Fee', 0, 13], ['Registration Fee', 0, 14],
   ];
   const insertFT = db.prepare('INSERT OR IGNORE INTO fee_types (name, is_system, sort_order) VALUES (?, ?, ?)');
-  const seedFeeTypes = db.transaction(() => {
-    for (const [name, isSystem, sortOrder] of defaultFeeTypes) insertFT.run(name, isSystem, sortOrder);
+  const updateSort = db.prepare('UPDATE fee_types SET sort_order = ? WHERE name = ?');
+  const migrateFeeTypes = db.transaction(() => {
+    for (const [name, isSystem, sortOrder] of desiredFeeTypes) {
+      insertFT.run(name, isSystem, sortOrder);
+      updateSort.run(sortOrder, name);
+    }
   });
-  seedFeeTypes();
+  migrateFeeTypes();
 }
 
 // Ensure default admin user exists for existing databases

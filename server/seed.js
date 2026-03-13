@@ -32,9 +32,10 @@ function seed() {
     // Fee types
     const insertFeeType = db.prepare('INSERT OR IGNORE INTO fee_types (name, is_system, sort_order) VALUES (?, ?, ?)');
     const defaultFeeTypes = [
-      ['Tuition Fee', 1, 0], ['Misc. Fee', 0, 1], ['Laboratory Fee', 0, 2], ['Library Fee', 0, 3],
-      ['Athletic Fee', 0, 4], ['ID Fee', 0, 5], ['Insurance Fee', 0, 6], ['Development Fee', 0, 7],
-      ['Energy Fee', 0, 8], ['Internet Fee', 0, 9], ['Registration Fee', 0, 10], ['Graduation Fee', 0, 11],
+      ['Tuition Fee', 1, 0], ['Misc. Fee', 0, 1], ['Book Fee', 0, 2], ['Uniform Fee', 0, 3],
+      ['PE Uniform', 0, 4], ['Graduation Fee', 0, 5], ['Laboratory Fee', 0, 6], ['Library Fee', 0, 7],
+      ['Athletic Fee', 0, 8], ['ID Fee', 0, 9], ['Insurance Fee', 0, 10], ['Development Fee', 0, 11],
+      ['Energy Fee', 0, 12], ['Internet Fee', 0, 13], ['Registration Fee', 0, 14],
     ];
     for (const [name, isSystem, sortOrder] of defaultFeeTypes) {
       insertFeeType.run(name, isSystem, sortOrder);

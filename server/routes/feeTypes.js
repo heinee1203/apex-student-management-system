@@ -6,7 +6,7 @@ const { requireRole } = require('../middleware/role');
 // GET /api/fee-types
 router.get('/', (req, res) => {
   try {
-    const rows = db.prepare('SELECT * FROM fee_types ORDER BY name').all();
+    const rows = db.prepare('SELECT * FROM fee_types ORDER BY sort_order, name').all();
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
