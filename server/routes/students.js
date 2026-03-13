@@ -1,8 +1,34 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs');
 const db = require('../db');
 const { generateTuitionObligations } = require('../utils/generateTuition');
+const { enrollStudent } = require('../utils/enrollStudent');
 const { requireRole } = require('../middleware/role');
+
+// Multer setup for photo uploads
+const multer = require('multer');
+const UPLOADS_DIR = process.env.NODE_ENV === 'production'
+  ? '/data/photos'
+  : path.join(__dirname, '..', 'uploads', 'photos');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: UPLOADS_DIR,
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    cb(null, `${req.params.studentId}${ext}`);
+  },
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    cb(null, allowed.includes(file.mimetype));
+  },
+});
 
 // GET /api/students
 router.get('/', (req, res) => {
@@ -78,7 +104,7 @@ router.get('/:studentId', (req, res) => {
   }
 });
 
-// POST /api/students
+// POST /api/students — Register (no auto-enrollment, no fee generation)
 router.post('/', requireRole('Admin', 'Registrar'), (req, res) => {
   try {
     const { student_id, first_name, middle_name, last_name, grade_level, section, status, email, phone, guardian, guardian_phone, scholarship, date_enrolled, address, payment_term, total_tuition, school_year } = req.body;
@@ -89,49 +115,52 @@ router.post('/', requireRole('Admin', 'Registrar'), (req, res) => {
     const existing = db.prepare('SELECT id FROM students WHERE student_id = ?').get(student_id);
     if (existing) return res.status(409).json({ error: 'Student ID already exists' });
 
-    let tuitionCount = 0;
-    let otherFeesCount = 0;
-
-    const insertStudent = db.transaction(() => {
-      db.prepare(`
-        INSERT INTO students (id, student_id, first_name, middle_name, last_name, grade_level, section, status, email, phone, guardian, guardian_phone, scholarship, date_enrolled, address, payment_term, total_tuition, school_year)
-        VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(student_id, first_name, middle_name || null, last_name, grade_level, section || null, status || 'Enrolled', email || null, phone || null, guardian || null, guardian_phone || null, scholarship || 'None', date_enrolled || null, address || null, payment_term || null, total_tuition || 0, school_year || null);
-
-      const insertObl = db.prepare(`
-        INSERT INTO obligations (id, student_id, fee_type, payment_term, installment_number, school_year, amount, due_date, description)
-        VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      // Generate tuition installments
-      if (payment_term && total_tuition > 0) {
-        const obligations = generateTuitionObligations(student_id, payment_term, total_tuition, school_year);
-        for (const o of obligations) {
-          insertObl.run(o.student_id, o.fee_type, o.payment_term, o.installment_number, o.school_year, o.amount, o.due_date, o.description);
-        }
-        tuitionCount = obligations.length;
-      }
-
-      // Generate default fees (one-time fees)
-      if (school_year) {
-        const defaultFees = db.prepare(
-          `SELECT * FROM default_fees WHERE school_year = ? AND (grade_level = ? OR grade_level = 'ALL')`
-        ).all(school_year, grade_level);
-
-        const startYear = parseInt(school_year.split('-')[0]);
-        const dueDate = `${startYear}-06-15`;
-
-        for (const df of defaultFees) {
-          insertObl.run(student_id, df.fee_type, null, null, school_year, df.amount, dueDate, df.description);
-        }
-        otherFeesCount = defaultFees.length;
-      }
-    });
-
-    insertStudent();
+    db.prepare(`
+      INSERT INTO students (id, student_id, first_name, middle_name, last_name, grade_level, section, status, email, phone, guardian, guardian_phone, scholarship, date_enrolled, address, payment_term, total_tuition, school_year)
+      VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(student_id, first_name, middle_name || null, last_name, grade_level, section || null, status || 'Registered', email || null, phone || null, guardian || null, guardian_phone || null, scholarship || 'None', date_enrolled || null, address || null, payment_term || null, total_tuition || 0, school_year || null);
 
     const student = db.prepare('SELECT * FROM students WHERE student_id = ?').get(student_id);
-    res.status(201).json({ ...student, obligations_created: { tuition: tuitionCount, other_fees: otherFeesCount } });
+    res.status(201).json(student);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/students/:studentId/enroll — Enroll a single student
+router.post('/:studentId/enroll', requireRole('Admin', 'Registrar'), (req, res) => {
+  try {
+    const result = db.transaction(() => enrollStudent(req.params.studentId, db))();
+    const student = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
+    res.json({ ...student, enrolled: true, tuitionCount: result.tuitionCount, otherFeesCount: result.otherFeesCount });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/students/bulk-enroll — Enroll multiple students
+router.post('/bulk-enroll', requireRole('Admin', 'Registrar'), (req, res) => {
+  try {
+    const { studentIds } = req.body;
+    if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
+      return res.status(400).json({ error: 'studentIds array is required' });
+    }
+
+    const results = [];
+    const bulkEnroll = db.transaction(() => {
+      for (const sid of studentIds) {
+        try {
+          const r = enrollStudent(sid, db);
+          results.push({ studentId: sid, success: true, ...r });
+        } catch (err) {
+          results.push({ studentId: sid, success: false, error: err.message });
+        }
+      }
+    });
+    bulkEnroll();
+
+    const enrolled = results.filter(r => r.success).length;
+    res.json({ enrolled, total: studentIds.length, results });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -180,6 +209,52 @@ router.put('/:studentId', requireRole('Admin', 'Registrar'), (req, res) => {
 
     const updated = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
     res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/students/:studentId/photo — Upload student photo
+router.post('/:studentId/photo', requireRole('Admin', 'Registrar'), upload.single('photo'), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No photo uploaded or invalid file type' });
+
+    const student = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
+    if (!student) {
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    // Delete old photo if exists
+    if (student.photo_url) {
+      const oldFilename = path.basename(student.photo_url);
+      const oldPath = path.join(UPLOADS_DIR, oldFilename);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+
+    const photoUrl = `/uploads/photos/${req.file.filename}`;
+    db.prepare('UPDATE students SET photo_url = ? WHERE student_id = ?').run(photoUrl, req.params.studentId);
+
+    res.json({ photo_url: photoUrl });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/students/:studentId/photo — Remove student photo
+router.delete('/:studentId/photo', requireRole('Admin', 'Registrar'), (req, res) => {
+  try {
+    const student = db.prepare('SELECT photo_url FROM students WHERE student_id = ?').get(req.params.studentId);
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    if (student.photo_url) {
+      const filename = path.basename(student.photo_url);
+      const filePath = path.join(UPLOADS_DIR, filename);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      db.prepare('UPDATE students SET photo_url = NULL WHERE student_id = ?').run(req.params.studentId);
+    }
+
+    res.json({ message: 'Photo removed' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

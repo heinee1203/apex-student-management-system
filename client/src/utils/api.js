@@ -43,6 +43,26 @@ export const api = {
   createStudent: (data) => request('/students', { method: 'POST', body: JSON.stringify(data) }),
   updateStudent: (studentId, data) => request(`/students/${studentId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteStudent: (studentId) => request(`/students/${studentId}`, { method: 'DELETE' }),
+  enrollStudent: (studentId) => request(`/students/${studentId}/enroll`, { method: 'POST' }),
+  bulkEnrollStudents: (studentIds) => request('/students/bulk-enroll', { method: 'POST', body: JSON.stringify({ studentIds }) }),
+  uploadStudentPhoto: (studentId, file) => {
+    const formData = new FormData();
+    formData.append('photo', file);
+    const token = sessionStorage.getItem('token');
+    return fetch(`${BASE_URL}/students/${studentId}/photo`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    }).then(async res => {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      return data;
+    });
+  },
+  deleteStudentPhoto: (studentId) => request(`/students/${studentId}/photo`, { method: 'DELETE' }),
+
+  // Admin
+  endSchoolYear: (data) => request('/admin/end-school-year', { method: 'POST', body: JSON.stringify(data) }),
 
   // Obligations
   getObligations: (params = {}) => {

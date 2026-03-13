@@ -1,11 +1,27 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const db = require('./db');
+
+// Ensure uploads directory exists — use persistent volume on Railway
+const UPLOADS_DIR = process.env.NODE_ENV === 'production'
+  ? '/data/photos'
+  : path.join(__dirname, 'uploads', 'photos');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
 
 // Auto-seed on first run
 const settingsCount = db.prepare('SELECT COUNT(*) as count FROM school_settings').get().count;
 if (settingsCount === 0) {
   require('./seed');
+}
+
+// Migrate students: add photo_url column if missing
+try {
+  db.prepare('SELECT photo_url FROM students LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE students ADD COLUMN photo_url TEXT');
 }
 
 // Migrate tuition_schedule: add monthly_rate and quarterly_rate columns if missing
@@ -70,6 +86,10 @@ app.use('/api/default-fees', authenticate, require('./routes/defaultFees'));
 // Admin-only routes
 app.use('/api/settings', authenticate, requireRole('Admin'), require('./routes/settings'));
 app.use('/api/users', authenticate, requireRole('Admin'), require('./routes/users'));
+app.use('/api/admin', authenticate, requireRole('Admin'), require('./routes/admin'));
+
+// Serve uploaded files (photos)
+app.use('/uploads/photos', express.static(UPLOADS_DIR));
 
 // Serve frontend static files
 const clientDist = path.join(__dirname, '..', 'client', 'dist');

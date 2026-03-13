@@ -3,7 +3,7 @@ import { formatCurrency, formatDate } from '../utils/format';
 export default function SOADocument({ data }) {
   if (!data) return null;
 
-  const { student, obligations, payments, totals, schoolInfo, payment_term, school_year } = data;
+  const { student, obligations, payments, totals, schoolInfo, payment_term, school_year, arrears } = data;
   const today = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
 
   return (
@@ -21,7 +21,11 @@ export default function SOADocument({ data }) {
       <h2 className="text-center text-lg font-bold mb-6 tracking-widest uppercase" style={{ color: '#1E3A44' }}>Statement of Account</h2>
 
       {/* Student Info */}
-      <div className="soa-student-info grid grid-cols-2 gap-x-8 gap-y-1 text-sm mb-6 rounded p-4" style={{ border: '1px solid #D6DDE2', backgroundColor: '#F4F6F8' }}>
+      <div className="soa-student-info flex gap-4 text-sm mb-6 rounded p-4" style={{ border: '1px solid #D6DDE2', backgroundColor: '#F4F6F8' }}>
+        {student.photo_url && (
+          <img src={student.photo_url} alt="" className="rounded object-cover flex-shrink-0" style={{ width: '72px', height: '72px', border: '1px solid #D6DDE2' }} />
+        )}
+        <div className="grid grid-cols-2 gap-x-8 gap-y-1 flex-1">
         <div><span className="font-semibold" style={{ color: '#2C5F6E' }}>Student Name:</span> {student.first_name} {student.middle_name ? student.middle_name + ' ' : ''}{student.last_name}</div>
         <div><span className="font-semibold" style={{ color: '#2C5F6E' }}>Student ID:</span> <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{student.student_id}</span></div>
         <div><span className="font-semibold" style={{ color: '#2C5F6E' }}>Grade/Year:</span> {student.grade_level}</div>
@@ -31,7 +35,39 @@ export default function SOADocument({ data }) {
         <div><span className="font-semibold" style={{ color: '#2C5F6E' }}>Scholarship:</span> {student.scholarship || 'None'}</div>
         <div><span className="font-semibold" style={{ color: '#2C5F6E' }}>Status:</span> {student.status}</div>
         <div className="col-span-2"><span className="font-semibold" style={{ color: '#2C5F6E' }}>Date Issued:</span> {today}</div>
+        </div>
       </div>
+
+      {/* Previous Arrears */}
+      {arrears && arrears.length > 0 && (
+        <>
+          <h3 className="font-bold text-sm mb-2 uppercase tracking-wider" style={{ color: '#C0504D' }}>Previous Arrears</h3>
+          <table className="w-full mb-4 text-sm" style={{ border: '1px solid #D6DDE2' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#C0504D', color: 'white' }}>
+                <th className="px-3 py-1.5 text-left" style={{ border: '1px solid #C0504D' }}>School Year</th>
+                <th className="px-3 py-1.5 text-right" style={{ border: '1px solid #C0504D' }}>Total Fees (₱)</th>
+                <th className="px-3 py-1.5 text-right" style={{ border: '1px solid #C0504D' }}>Total Paid (₱)</th>
+                <th className="px-3 py-1.5 text-right" style={{ border: '1px solid #C0504D' }}>Balance (₱)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {arrears.map((a, i) => (
+                <tr key={i}>
+                  <td className="px-3 py-1" style={{ border: '1px solid #D6DDE2' }}>{a.school_year}</td>
+                  <td className="px-3 py-1 text-right" style={{ border: '1px solid #D6DDE2', fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(a.total_fees)}</td>
+                  <td className="px-3 py-1 text-right" style={{ border: '1px solid #D6DDE2', fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(a.total_paid)}</td>
+                  <td className="px-3 py-1 text-right font-bold" style={{ border: '1px solid #D6DDE2', fontFamily: "'JetBrains Mono', monospace", color: '#C0504D' }}>{formatCurrency(a.balance)}</td>
+                </tr>
+              ))}
+              <tr style={{ backgroundColor: '#E8EDF0' }} className="font-bold">
+                <td className="px-3 py-1.5" colSpan={3} style={{ border: '1px solid #D6DDE2' }}>TOTAL ARREARS</td>
+                <td className="px-3 py-1.5 text-right" style={{ border: '1px solid #D6DDE2', fontFamily: "'JetBrains Mono', monospace", color: '#C0504D' }}>{formatCurrency(totals.arrears)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </>
+      )}
 
       {/* Assessed Fees */}
       <h3 className="font-bold text-sm mb-2 uppercase tracking-wider" style={{ color: '#2C5F6E' }}>Assessed Fees</h3>
@@ -106,9 +142,15 @@ export default function SOADocument({ data }) {
       {/* Summary */}
       <div className="soa-summary-box rounded p-4 mb-6" style={{ border: '2px solid #2C5F6E', backgroundColor: '#F4F6F8' }}>
         <div className="grid grid-cols-2 gap-2 text-sm" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-          <span className="font-bold" style={{ color: '#1E3A44' }}>TOTAL FEES:</span><span className="text-right">{formatCurrency(totals.totalFees)}</span>
+          <span className="font-bold" style={{ color: '#1E3A44' }}>CURRENT FEES:</span><span className="text-right">{formatCurrency(totals.currentFees || totals.totalFees)}</span>
+          {totals.arrears > 0 && (
+            <>
+              <span className="font-bold" style={{ color: '#C0504D' }}>ARREARS:</span><span className="text-right" style={{ color: '#C0504D' }}>{formatCurrency(totals.arrears)}</span>
+              <span className="font-bold" style={{ color: '#1E3A44' }}>TOTAL OBLIGATIONS:</span><span className="text-right">{formatCurrency(totals.totalObligations)}</span>
+            </>
+          )}
           <span className="font-bold" style={{ color: '#1E3A44' }}>TOTAL PAID:</span><span className="text-right" style={{ color: '#2E8B6A' }}>{formatCurrency(totals.totalPaid)}</span>
-          <span className="font-bold" style={{ color: '#1E3A44' }}>REMAINING BALANCE:</span><span className="text-right font-bold" style={{ color: '#C0504D' }}>{formatCurrency(totals.balance)}</span>
+          <span className="font-bold" style={{ color: '#1E3A44' }}>REMAINING BALANCE:</span><span className="text-right font-bold" style={{ color: '#C0504D' }}>{formatCurrency(totals.remainingBalance || totals.balance)}</span>
           <span className="font-bold" style={{ color: '#1E3A44' }}>STATUS:</span><span className="text-right font-bold">{totals.status}</span>
         </div>
       </div>

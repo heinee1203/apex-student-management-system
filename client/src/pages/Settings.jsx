@@ -339,11 +339,31 @@ export default function Settings({ onMenuClick }) {
 
   if (loading) return <div className="flex items-center justify-center h-full text-brand-slate">Loading...</div>;
 
+  // Tab 5: School Year Management
+  const [endYearConfirm, setEndYearConfirm] = useState('');
+  const [promoteStudents, setPromoteStudents] = useState(true);
+  const [endingYear, setEndingYear] = useState(false);
+
+  const handleEndSchoolYear = async () => {
+    if (endYearConfirm !== 'CONFIRM') return;
+    try {
+      setEndingYear(true);
+      const result = await api.endSchoolYear({ confirm: 'CONFIRM', promote: promoteStudents });
+      addToast(`School year ended: ${result.updated} students updated${promoteStudents ? `, ${result.promoted} promoted` : ''}${result.graduated > 0 ? `, ${result.graduated} graduated` : ''}`);
+      setEndYearConfirm('');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setEndingYear(false);
+    }
+  };
+
   const tabs = [
     { id: 'school', label: 'School Information' },
     { id: 'tuition', label: 'Tuition Fee Schedule' },
     { id: 'feeTypes', label: 'Fee Types' },
     { id: 'defaultFees', label: 'Default Fees' },
+    { id: 'schoolYear', label: 'School Year' },
   ];
 
   return (
@@ -611,6 +631,56 @@ export default function Settings({ onMenuClick }) {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+        {/* Tab 5: School Year */}
+        {activeTab === 'schoolYear' && (
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-white border border-brand-border rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-brand-navy mb-2">End of School Year</h3>
+              <p className="text-sm text-brand-slate mb-6">This action will transition all enrolled students to the next school year.</p>
+
+              <div className="bg-brand-light rounded-lg p-4 mb-6 space-y-2">
+                <h4 className="text-sm font-semibold text-brand-navy">What this will do:</h4>
+                <ul className="text-sm text-brand-slate space-y-1 list-disc list-inside">
+                  <li>Set all <strong>Enrolled</strong> students to <strong>Not Enrolled</strong></li>
+                  <li>If promote is checked: advance each student to the next grade level</li>
+                  <li>Grade 6 students will be marked as <strong>Graduated</strong></li>
+                  <li>Students can then be re-enrolled for the new school year</li>
+                </ul>
+              </div>
+
+              <div className="space-y-4">
+                <label className="flex items-center gap-3 text-sm text-brand-navy">
+                  <input
+                    type="checkbox"
+                    checked={promoteStudents}
+                    onChange={e => setPromoteStudents(e.target.checked)}
+                    className="rounded"
+                  />
+                  Promote students to next grade level
+                </label>
+
+                <div>
+                  <label className="block text-xs text-brand-slate mb-1">Type "CONFIRM" to proceed</label>
+                  <input
+                    type="text"
+                    value={endYearConfirm}
+                    onChange={e => setEndYearConfirm(e.target.value)}
+                    placeholder="CONFIRM"
+                    className="w-full bg-white border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-navy focus:outline-none focus:border-brand-steel"
+                  />
+                </div>
+
+                <button
+                  onClick={handleEndSchoolYear}
+                  disabled={endYearConfirm !== 'CONFIRM' || endingYear}
+                  className="bg-[#C0504D] hover:bg-[#a3403d] disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors"
+                >
+                  {endingYear ? 'Processing...' : 'End School Year'}
+                </button>
+              </div>
             </div>
           </div>
         )}

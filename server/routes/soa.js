@@ -30,10 +30,35 @@ router.get('/:studentId', (req, res) => {
 
     const totalFees = obligations.reduce((sum, o) => sum + o.amount, 0);
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-    const balance = totalFees - totalPaid;
+
+    // Calculate arrears from previous school years
+    let arrears = [];
+    let totalArrears = 0;
+    if (school_year) {
+      const prevYears = db.prepare(
+        `SELECT DISTINCT school_year FROM obligations WHERE student_id = ? AND school_year < ? ORDER BY school_year ASC`
+      ).all(req.params.studentId, school_year);
+
+      for (const py of prevYears) {
+        const pyFees = db.prepare(
+          `SELECT COALESCE(SUM(amount), 0) as total FROM obligations WHERE student_id = ? AND school_year = ?`
+        ).get(req.params.studentId, py.school_year).total;
+        const pyPaid = db.prepare(
+          `SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE student_id = ? AND school_year = ?`
+        ).get(req.params.studentId, py.school_year).total;
+        const pyBalance = pyFees - pyPaid;
+        if (pyBalance > 0) {
+          arrears.push({ school_year: py.school_year, total_fees: pyFees, total_paid: pyPaid, balance: pyBalance });
+          totalArrears += pyBalance;
+        }
+      }
+    }
+
+    const totalObligations = totalFees + totalArrears;
+    const remainingBalance = totalObligations - totalPaid;
 
     let status = 'UNPAID';
-    if (totalPaid >= totalFees && totalFees > 0) status = 'FULLY PAID';
+    if (totalPaid >= totalObligations && totalObligations > 0) status = 'FULLY PAID';
     else if (totalPaid > 0) status = 'PARTIAL';
 
     // School info
@@ -45,7 +70,17 @@ router.get('/:studentId', (req, res) => {
       student,
       obligations,
       payments,
-      totals: { totalFees, totalPaid, balance, status },
+      arrears,
+      totals: {
+        totalFees,
+        totalPaid,
+        balance: remainingBalance,
+        status,
+        arrears: totalArrears,
+        currentFees: totalFees,
+        totalObligations,
+        remainingBalance,
+      },
       schoolInfo,
       payment_term: student.payment_term || 'N/A',
       school_year: school_year || 'All'

@@ -14,10 +14,10 @@ import { useAuth } from '../context/AuthContext';
 const gradeLevels = ['Nursery 1', 'Nursery 2', 'Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
 const paymentTerms = ['Monthly', 'Quarterly', 'Annually'];
 const payStatuses = ['Paid', 'Partial', 'Unpaid', 'Overdue'];
-const statuses = ['Enrolled', 'Dropped', 'LOA', 'Graduated', 'Irregular'];
+const statuses = ['Registered', 'Enrolled', 'Not Enrolled', 'Dropped', 'LOA', 'Graduated'];
 const scholarships = ['None', 'Full Scholarship', 'Half Scholarship', 'Academic Scholar', 'Athletic Scholar', 'Government (TES)', 'CHED Scholarship', 'LGU Scholarship'];
 
-const emptyForm = { student_id: '', first_name: '', middle_name: '', last_name: '', grade_level: 'Nursery 1', section: '', status: 'Enrolled', email: '', phone: '', guardian: '', guardian_phone: '', scholarship: 'None', date_enrolled: '', address: '', payment_term: 'Monthly', total_tuition: '', school_year: getCurrentSchoolYear() };
+const emptyForm = { student_id: '', first_name: '', middle_name: '', last_name: '', grade_level: 'Nursery 1', section: '', status: 'Registered', email: '', phone: '', guardian: '', guardian_phone: '', scholarship: 'None', date_enrolled: '', address: '', payment_term: 'Monthly', total_tuition: '', school_year: getCurrentSchoolYear() };
 
 export default function Students({ onMenuClick }) {
   const [students, setStudents] = useState([]);
@@ -31,6 +31,10 @@ export default function Students({ onMenuClick }) {
   const [form, setForm] = useState(emptyForm);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [tuitionWarning, setTuitionWarning] = useState('');
+  const [bulkEnrollOpen, setBulkEnrollOpen] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState([]);
+  const [bulkGradeFilter, setBulkGradeFilter] = useState('');
+  const [enrolling, setEnrolling] = useState(false);
   const addToast = useToast();
   const navigate = useNavigate();
   const { hasRole } = useAuth();
@@ -88,13 +92,8 @@ export default function Students({ onMenuClick }) {
         await api.updateStudent(editing, data);
         addToast('Student updated successfully');
       } else {
-        const result = await api.createStudent(data);
-        if (result.obligations_created) {
-          const { tuition, other_fees } = result.obligations_created;
-          addToast(`Student enrolled — ${tuition} tuition installment${tuition !== 1 ? 's' : ''} + ${other_fees} other fee${other_fees !== 1 ? 's' : ''} created`);
-        } else {
-          addToast('Student created successfully');
-        }
+        await api.createStudent(data);
+        addToast('Student registered successfully');
       }
       setModalOpen(false);
       load();
@@ -113,6 +112,40 @@ export default function Students({ onMenuClick }) {
       addToast(err.message, 'error');
     }
   };
+
+  const handleEnroll = async (studentId) => {
+    try {
+      setEnrolling(true);
+      const result = await api.enrollStudent(studentId);
+      addToast(`Student enrolled — ${result.tuitionCount} tuition + ${result.otherFeesCount} fee obligations created`);
+      load();
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
+  const handleBulkEnroll = async () => {
+    if (bulkSelected.length === 0) return;
+    try {
+      setEnrolling(true);
+      const result = await api.bulkEnrollStudents(bulkSelected);
+      const successCount = result.results.filter(r => r.status === 'enrolled').length;
+      const failCount = result.results.filter(r => r.status === 'error').length;
+      addToast(`Bulk enroll: ${successCount} enrolled${failCount > 0 ? `, ${failCount} failed` : ''}`);
+      setBulkEnrollOpen(false);
+      setBulkSelected([]);
+      load();
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
+  const enrollableStudents = students.filter(s => s.status === 'Registered' || s.status === 'Not Enrolled');
+  const bulkFilteredStudents = bulkGradeFilter ? enrollableStudents.filter(s => s.grade_level === bulkGradeFilter) : enrollableStudents;
 
   const setField = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 
@@ -150,6 +183,11 @@ export default function Students({ onMenuClick }) {
         {(hasActiveFilters || search) && (
           <button onClick={clearFilters} className="text-xs text-brand-slate hover:text-status-danger underline whitespace-nowrap">Clear Filters</button>
         )}
+        {canEdit && enrollableStudents.length > 0 && (
+          <button onClick={() => { setBulkEnrollOpen(true); setBulkSelected([]); setBulkGradeFilter(''); }} className="bg-[#2E8B6A] hover:bg-[#257256] text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap">
+            Bulk Enroll
+          </button>
+        )}
         {canEdit && <button onClick={openAdd} className="bg-brand-steel hover:bg-brand-teal text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap">
           + Add Student
         </button>}
@@ -182,7 +220,14 @@ export default function Students({ onMenuClick }) {
                   <tr key={s.student_id} className="border-b border-brand-border/50 hover:bg-brand-light/50">
                     <td className="px-4 py-2 font-mono text-xs text-brand-slate">{s.student_id}</td>
                     <td className="px-4 py-2">
-                      <Link to={`/students/${s.student_id}`} className="text-brand-steel hover:text-brand-teal font-medium">
+                      <Link to={`/students/${s.student_id}`} className="text-brand-steel hover:text-brand-teal font-medium flex items-center gap-2">
+                        {s.photo_url ? (
+                          <img src={s.photo_url} alt="" className="w-7 h-7 rounded-full object-cover border border-brand-border" />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-brand-steel/10 text-brand-steel flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                            {s.first_name?.[0]}{s.last_name?.[0]}
+                          </div>
+                        )}
                         {s.last_name}, {s.first_name} {s.middle_name ? s.middle_name.charAt(0) + '.' : ''}
                       </Link>
                     </td>
@@ -196,6 +241,11 @@ export default function Students({ onMenuClick }) {
                     <td className="px-4 py-2"><PayStatusBadge status={s.pay_status} /></td>
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-1">
+                        {canEdit && (s.status === 'Registered' || s.status === 'Not Enrolled') && (
+                          <button onClick={() => handleEnroll(s.student_id)} disabled={enrolling} className="text-[#2E8B6A] hover:text-[#257256] p-1" title="Enroll">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          </button>
+                        )}
                         <button onClick={() => navigate(`/students/${s.student_id}`)} className="text-brand-slate hover:text-brand-steel p-1" title="View">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                         </button>
@@ -322,6 +372,70 @@ export default function Students({ onMenuClick }) {
       </Modal>
 
       <ConfirmDialog isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete} message="This will permanently delete this student and all their fees and payments." />
+
+      {/* Bulk Enroll Modal */}
+      <Modal isOpen={bulkEnrollOpen} onClose={() => setBulkEnrollOpen(false)} title="Bulk Enroll Students" wide>
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <select value={bulkGradeFilter} onChange={e => setBulkGradeFilter(e.target.value)} className="bg-white border border-brand-border rounded-lg px-2 py-1.5 text-sm text-brand-navy focus:outline-none focus:border-brand-steel">
+              <option value="">All Grade Levels</option>
+              {gradeLevels.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
+            <label className="text-sm text-brand-slate flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={bulkFilteredStudents.length > 0 && bulkSelected.length === bulkFilteredStudents.length}
+                onChange={e => setBulkSelected(e.target.checked ? bulkFilteredStudents.map(s => s.student_id) : [])}
+                className="rounded"
+              />
+              Select All ({bulkFilteredStudents.length})
+            </label>
+          </div>
+          <div className="max-h-80 overflow-y-auto border border-brand-border rounded-lg">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-brand-slate border-b border-brand-border bg-brand-light sticky top-0">
+                  <th className="px-3 py-2 w-8"></th>
+                  <th className="px-3 py-2 text-left">Student ID</th>
+                  <th className="px-3 py-2 text-left">Name</th>
+                  <th className="px-3 py-2 text-left">Grade</th>
+                  <th className="px-3 py-2 text-left">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bulkFilteredStudents.map(s => (
+                  <tr key={s.student_id} className="border-b border-brand-border/50 hover:bg-brand-light/50">
+                    <td className="px-3 py-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={bulkSelected.includes(s.student_id)}
+                        onChange={e => setBulkSelected(prev => e.target.checked ? [...prev, s.student_id] : prev.filter(id => id !== s.student_id))}
+                        className="rounded"
+                      />
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs text-brand-slate">{s.student_id}</td>
+                    <td className="px-3 py-2 text-brand-navy">{s.last_name}, {s.first_name}</td>
+                    <td className="px-3 py-2 text-brand-navy">{s.grade_level}</td>
+                    <td className="px-3 py-2"><StatusBadge status={s.status} /></td>
+                  </tr>
+                ))}
+                {bulkFilteredStudents.length === 0 && (
+                  <tr><td colSpan={5} className="px-3 py-6 text-center text-brand-slate">No enrollable students found</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex justify-between items-center pt-2">
+            <span className="text-sm text-brand-slate">{bulkSelected.length} student{bulkSelected.length !== 1 ? 's' : ''} selected</span>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setBulkEnrollOpen(false)} className="px-4 py-2 text-sm text-brand-navy bg-brand-light hover:bg-brand-border rounded-lg">Cancel</button>
+              <button type="button" onClick={handleBulkEnroll} disabled={bulkSelected.length === 0 || enrolling} className="px-4 py-2 text-sm text-white bg-[#2E8B6A] hover:bg-[#257256] rounded-lg disabled:opacity-50">
+                {enrolling ? 'Enrolling...' : `Enroll ${bulkSelected.length} Student${bulkSelected.length !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

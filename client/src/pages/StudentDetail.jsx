@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import Modal from '../components/Modal';
@@ -38,6 +38,8 @@ export default function StudentDetail({ onMenuClick }) {
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteType, setDeleteType] = useState('');
+  const [enrolling, setEnrolling] = useState(false);
+  const photoInputRef = useRef(null);
 
   const load = async () => {
     try {
@@ -101,6 +103,32 @@ export default function StudentDetail({ onMenuClick }) {
     } catch (err) { addToast(err.message, 'error'); }
   };
 
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      await api.uploadStudentPhoto(studentId, file);
+      addToast('Photo uploaded');
+      load();
+    } catch (err) {
+      addToast(err.message, 'error');
+    }
+    e.target.value = '';
+  };
+
+  const handleEnroll = async () => {
+    try {
+      setEnrolling(true);
+      const result = await api.enrollStudent(studentId);
+      addToast(`Student enrolled — ${result.tuitionCount} tuition + ${result.otherFeesCount} fee obligations created`);
+      load();
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center h-full text-brand-slate">Loading...</div>;
   if (!student) return <div className="flex items-center justify-center h-full text-brand-slate">Student not found</div>;
 
@@ -119,11 +147,34 @@ export default function StudentDetail({ onMenuClick }) {
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-brand-steel/10 flex items-center justify-center text-xl font-bold text-brand-steel">
-            {student.first_name[0]}{student.last_name[0]}
+          <div className="relative group">
+            {student.photo_url ? (
+              <img src={student.photo_url} alt="" className="w-14 h-14 rounded-full object-cover border-2 border-brand-border" />
+            ) : (
+              <div className="w-14 h-14 rounded-full bg-brand-steel/10 flex items-center justify-center text-xl font-bold text-brand-steel">
+                {student.first_name[0]}{student.last_name[0]}
+              </div>
+            )}
+            {canEdit && (
+              <button
+                onClick={() => photoInputRef.current?.click()}
+                className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+                title="Upload photo"
+              >
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              </button>
+            )}
+            <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhotoUpload} />
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-brand-navy">{student.first_name} {student.middle_name ? student.middle_name + ' ' : ''}{student.last_name}</h2>
+          <div className="flex-1">
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-bold text-brand-navy">{student.first_name} {student.middle_name ? student.middle_name + ' ' : ''}{student.last_name}</h2>
+              {canEdit && (student.status === 'Registered' || student.status === 'Not Enrolled') && (
+                <button onClick={handleEnroll} disabled={enrolling} className="bg-[#2E8B6A] hover:bg-[#257256] text-white px-3 py-1 rounded-lg text-xs font-medium disabled:opacity-50">
+                  {enrolling ? 'Enrolling...' : `Enroll for S.Y. ${student.school_year || ''}`}
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-3 text-sm text-brand-slate">
               <span className="font-mono">{student.student_id}</span>
               <span>{student.grade_level} — {student.section || 'No Section'}</span>
