@@ -47,16 +47,18 @@ app.use('/api/tuition-schedule', require('./routes/tuitionSchedule'));
 app.use('/api/fee-types', require('./routes/feeTypes'));
 app.use('/api/default-fees', require('./routes/defaultFees'));
 
-// Serve frontend in production
-if (process.env.NODE_ENV === 'production') {
-  const clientDist = path.join(__dirname, '..', 'client', 'dist');
-  app.use(express.static(clientDist));
-  app.get('*', (req, res) => {
+// Serve frontend static files
+const clientDist = path.join(__dirname, '..', 'client', 'dist');
+app.use(express.static(clientDist));
+
+// SPA fallback — all non-API routes serve the frontend
+app.get('*', (req, res) => {
+  if (!req.path.startsWith('/api')) {
     res.sendFile(path.join(clientDist, 'index.html'));
-  });
-}
+  }
+});
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`SchoolFinance API running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`SchoolFinance API running on port ${PORT}`);
 });
