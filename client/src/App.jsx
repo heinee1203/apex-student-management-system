@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Sidebar from './components/Sidebar';
 import { ToastProvider } from './components/Toast';
-import PinDialog from './components/PinDialog';
+import PinGate from './components/PinGate';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Students from './pages/Students';
@@ -16,27 +16,15 @@ import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Users from './pages/Users';
 
-function PinGate({ children, onMenuClick }) {
-  const { settingsUnlocked, unlockSettings, hasRole } = useAuth();
-  const navigate = useNavigate();
-
-  if (!hasRole('Admin')) return <Navigate to="/" replace />;
-
-  if (!settingsUnlocked) {
-    return (
-      <PinDialog
-        onSuccess={unlockSettings}
-        onCancel={() => navigate(-1)}
-      />
-    );
-  }
-
-  return typeof children === 'function' ? children() : children;
-}
-
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { isAuthenticated, loading, hasRole } = useAuth();
+  const [settingsUnlocked, setSettingsUnlocked] = useState(false);
+  const { isAuthenticated, loading, hasRole, logout: authLogout } = useAuth();
+
+  const handleLogout = () => {
+    setSettingsUnlocked(false);
+    authLogout();
+  };
 
   if (loading) {
     return (
@@ -62,7 +50,7 @@ export default function App() {
         <Route path="*" element={
           isAuthenticated ? (
             <div className="flex h-screen overflow-hidden">
-              <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+              <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onLogout={handleLogout} />
               <main className="flex-1 overflow-y-auto">
                 <Routes>
                   <Route path="/" element={<Dashboard onMenuClick={() => setSidebarOpen(true)} />} />
@@ -73,14 +61,18 @@ export default function App() {
                   <Route path="/soa" element={<StatementOfAccount onMenuClick={() => setSidebarOpen(true)} />} />
                   <Route path="/reports" element={<Reports onMenuClick={() => setSidebarOpen(true)} />} />
                   <Route path="/settings" element={
-                    <PinGate>
-                      <Settings onMenuClick={() => setSidebarOpen(true)} />
-                    </PinGate>
+                    hasRole('Admin') ? (
+                      <PinGate unlocked={settingsUnlocked} setUnlocked={setSettingsUnlocked}>
+                        <Settings onMenuClick={() => setSidebarOpen(true)} />
+                      </PinGate>
+                    ) : <Navigate to="/" replace />
                   } />
                   <Route path="/users" element={
-                    <PinGate>
-                      <Users onMenuClick={() => setSidebarOpen(true)} />
-                    </PinGate>
+                    hasRole('Admin') ? (
+                      <PinGate unlocked={settingsUnlocked} setUnlocked={setSettingsUnlocked}>
+                        <Users onMenuClick={() => setSidebarOpen(true)} />
+                      </PinGate>
+                    ) : <Navigate to="/" replace />
                   } />
                 </Routes>
               </main>
