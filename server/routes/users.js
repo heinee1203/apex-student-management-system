@@ -34,9 +34,10 @@ router.post('/', (req, res) => {
     }
 
     const hash = bcrypt.hashSync(password, 10);
-    const id = db.prepare(`INSERT INTO users (id, username, password_hash, full_name, role)
-      VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?) RETURNING id`
-    ).get(username, hash, fullName, role || 'Viewer').id;
+    const id = require('crypto').randomBytes(16).toString('hex');
+    db.prepare(`INSERT INTO users (id, username, password_hash, full_name, role)
+      VALUES (?, ?, ?, ?, ?)`
+    ).run(id, username, hash, fullName, role || 'Viewer');
 
     const user = db.prepare('SELECT id, username, full_name, role, is_active, created_at, last_login FROM users WHERE id = ?').get(id);
     res.status(201).json(user);
