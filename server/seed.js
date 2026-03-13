@@ -1,4 +1,5 @@
 const db = require('./db');
+const bcrypt = require('bcryptjs');
 
 function seed() {
   const settingsCount = db.prepare('SELECT COUNT(*) as count FROM school_settings').get().count;
@@ -84,6 +85,10 @@ function seed() {
         insertDefaultFee.run(gl, sy, ft, amt, desc);
       }
     }
+    // Default admin user
+    db.prepare(`INSERT OR IGNORE INTO users (id, username, password_hash, full_name, role)
+      VALUES (lower(hex(randomblob(16))), 'admin', ?, 'Administrator', 'Admin')
+    `).run(bcrypt.hashSync('apex2024', 10));
   });
 
   seedAll();

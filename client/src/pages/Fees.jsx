@@ -6,6 +6,7 @@ import { useToast } from '../components/Toast';
 import { api } from '../utils/api';
 import { formatCurrency, formatDate } from '../utils/format';
 import { getCurrentSchoolYear } from '../utils/schoolYear';
+import { useAuth } from '../context/AuthContext';
 
 export default function Fees({ onMenuClick }) {
   const [obligations, setObligations] = useState([]);
@@ -19,6 +20,8 @@ export default function Fees({ onMenuClick }) {
   const [assignTo, setAssignTo] = useState('student');
   const [gradeLevel, setGradeLevel] = useState('');
   const addToast = useToast();
+  const { hasRole } = useAuth();
+  const canEdit = hasRole('Admin', 'Registrar');
 
   const GRADE_LEVELS = ['Nursery 1', 'Nursery 2', 'Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
   const gradeCount = assignTo === 'grade' && gradeLevel ? students.filter(s => s.grade_level === gradeLevel && s.status === 'Enrolled' && s.school_year === form.school_year).length : 0;
@@ -72,7 +75,7 @@ export default function Fees({ onMenuClick }) {
   return (
     <div>
       <TopBar title="Fees & Obligations" onMenuClick={onMenuClick}>
-        <button onClick={() => { setEditing(null); setAssignTo('student'); setGradeLevel(''); setForm({ student_id: '', fee_type: feeTypesList[0] || 'Tuition Fee', payment_term: '', installment_number: '', school_year: getCurrentSchoolYear(), amount: '', due_date: '', description: '' }); setModalOpen(true); }} className="bg-brand-steel hover:bg-brand-teal text-white px-4 py-1.5 rounded-lg text-sm font-medium">+ Add Fee</button>
+        {canEdit && <button onClick={() => { setEditing(null); setAssignTo('student'); setGradeLevel(''); setForm({ student_id: '', fee_type: feeTypesList[0] || 'Tuition Fee', payment_term: '', installment_number: '', school_year: getCurrentSchoolYear(), amount: '', due_date: '', description: '' }); setModalOpen(true); }} className="bg-brand-steel hover:bg-brand-teal text-white px-4 py-1.5 rounded-lg text-sm font-medium">+ Add Fee</button>}
       </TopBar>
 
       <div className="p-6">
@@ -109,14 +112,14 @@ export default function Fees({ onMenuClick }) {
                         {overdue && <span className="ml-1 text-xs bg-status-danger/10 text-status-danger px-1.5 py-0.5 rounded">Overdue</span>}
                       </td>
                       <td className="px-4 py-2">
-                        <div className="flex gap-1">
+                        {canEdit && <div className="flex gap-1">
                           <button onClick={() => { setEditing(o.id); setForm({ student_id: o.student_id, fee_type: o.fee_type, payment_term: o.payment_term || '', installment_number: o.installment_number || '', school_year: o.school_year, amount: o.amount, due_date: o.due_date || '', description: o.description || '' }); setModalOpen(true); }} className="text-brand-slate hover:text-status-warning p-1">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                           </button>
                           <button onClick={() => setDeleteTarget(o.id)} className="text-brand-slate hover:text-status-danger p-1">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                           </button>
-                        </div>
+                        </div>}
                       </td>
                     </tr>
                   );

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { requireRole } = require('../middleware/role');
 
 const GRADE_ORDER = `CASE grade_level
   WHEN 'ALL' THEN 0
@@ -32,7 +33,7 @@ router.get('/', (req, res) => {
 });
 
 // POST /api/default-fees
-router.post('/', (req, res) => {
+router.post('/', requireRole('Admin', 'Registrar'), (req, res) => {
   try {
     const { grade_level, school_year, fee_type, amount, description } = req.body;
     if (!grade_level || !school_year || !fee_type || amount == null) {
@@ -52,7 +53,7 @@ router.post('/', (req, res) => {
 });
 
 // PUT /api/default-fees/:id
-router.put('/:id', (req, res) => {
+router.put('/:id', requireRole('Admin', 'Registrar'), (req, res) => {
   try {
     const existing = db.prepare('SELECT * FROM default_fees WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Default fee not found' });
@@ -79,7 +80,7 @@ router.put('/:id', (req, res) => {
 });
 
 // DELETE /api/default-fees/:id
-router.delete('/:id', (req, res) => {
+router.delete('/:id', requireRole('Admin', 'Registrar'), (req, res) => {
   try {
     const existing = db.prepare('SELECT * FROM default_fees WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Default fee not found' });

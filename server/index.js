@@ -32,20 +32,40 @@ if (feeTypeCount === 0) {
   seedFeeTypes();
 }
 
+// Ensure default admin user exists for existing databases
+const bcrypt = require('bcryptjs');
+const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
+if (userCount === 0) {
+  db.prepare(`INSERT INTO users (id, username, password_hash, full_name, role)
+    VALUES (lower(hex(randomblob(16))), 'admin', ?, 'Administrator', 'Admin')
+  `).run(bcrypt.hashSync('apex2024', 10));
+  console.log('Default admin user created (admin / apex2024)');
+}
+
 const app = express();
 app.use(express.json());
 
-// API routes
-app.use('/api/students', require('./routes/students'));
-app.use('/api/obligations', require('./routes/obligations'));
-app.use('/api/payments', require('./routes/payments'));
-app.use('/api/dashboard', require('./routes/dashboard'));
-app.use('/api/reports', require('./routes/reports'));
-app.use('/api/soa', require('./routes/soa'));
-app.use('/api/settings', require('./routes/settings'));
-app.use('/api/tuition-schedule', require('./routes/tuitionSchedule'));
-app.use('/api/fee-types', require('./routes/feeTypes'));
-app.use('/api/default-fees', require('./routes/defaultFees'));
+// Auth middleware
+const { authenticate } = require('./middleware/auth');
+const { requireRole } = require('./middleware/role');
+
+// Public auth routes
+app.use('/api/auth', require('./routes/auth'));
+
+// Authenticated API routes
+app.use('/api/students', authenticate, require('./routes/students'));
+app.use('/api/obligations', authenticate, require('./routes/obligations'));
+app.use('/api/payments', authenticate, require('./routes/payments'));
+app.use('/api/dashboard', authenticate, require('./routes/dashboard'));
+app.use('/api/reports', authenticate, require('./routes/reports'));
+app.use('/api/soa', authenticate, require('./routes/soa'));
+app.use('/api/tuition-schedule', authenticate, require('./routes/tuitionSchedule'));
+app.use('/api/fee-types', authenticate, require('./routes/feeTypes'));
+app.use('/api/default-fees', authenticate, require('./routes/defaultFees'));
+
+// Admin-only routes
+app.use('/api/settings', authenticate, requireRole('Admin'), require('./routes/settings'));
+app.use('/api/users', authenticate, requireRole('Admin'), require('./routes/users'));
 
 // Serve frontend static files
 const clientDist = path.join(__dirname, '..', 'client', 'dist');

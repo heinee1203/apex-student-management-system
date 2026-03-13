@@ -98,6 +98,17 @@ function initializeDatabase() {
       created_at   TEXT DEFAULT (datetime('now','localtime'))
     );
 
+    CREATE TABLE IF NOT EXISTS users (
+      id            TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+      username      TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      full_name     TEXT NOT NULL,
+      role          TEXT NOT NULL DEFAULT 'Viewer',
+      is_active     INTEGER DEFAULT 1,
+      created_at    TEXT DEFAULT (datetime('now','localtime')),
+      last_login    TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_obligations_student ON obligations(student_id);
     CREATE INDEX IF NOT EXISTS idx_payments_student ON payments(student_id);
     CREATE INDEX IF NOT EXISTS idx_students_status ON students(status);

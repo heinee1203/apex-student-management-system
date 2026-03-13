@@ -6,6 +6,7 @@ import { useToast } from '../components/Toast';
 import { api } from '../utils/api';
 import { formatCurrency, formatDate } from '../utils/format';
 import { getCurrentSchoolYear } from '../utils/schoolYear';
+import { useAuth } from '../context/AuthContext';
 
 const methods = ['Cash', 'GCash', 'Maya', 'Bank Transfer', 'Check', 'Installment Plan'];
 export default function Payments({ onMenuClick }) {
@@ -17,6 +18,8 @@ export default function Payments({ onMenuClick }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [form, setForm] = useState({ student_id: '', amount: '', date: '', method: 'Cash', receipt_no: '', school_year: getCurrentSchoolYear(), notes: '' });
   const addToast = useToast();
+  const { hasRole } = useAuth();
+  const canEdit = hasRole('Admin', 'Registrar');
 
   const load = () => {
     setLoading(true);
@@ -56,7 +59,7 @@ export default function Payments({ onMenuClick }) {
   return (
     <div>
       <TopBar title="Payments" onMenuClick={onMenuClick}>
-        <button onClick={() => { setEditing(null); setForm({ student_id: '', amount: '', date: '', method: 'Cash', receipt_no: '', school_year: getCurrentSchoolYear(), notes: '' }); setModalOpen(true); }} className="bg-brand-steel hover:bg-brand-teal text-white px-4 py-1.5 rounded-lg text-sm font-medium">+ Add Payment</button>
+        {canEdit && <button onClick={() => { setEditing(null); setForm({ student_id: '', amount: '', date: '', method: 'Cash', receipt_no: '', school_year: getCurrentSchoolYear(), notes: '' }); setModalOpen(true); }} className="bg-brand-steel hover:bg-brand-teal text-white px-4 py-1.5 rounded-lg text-sm font-medium">+ Add Payment</button>}
       </TopBar>
 
       <div className="p-6">
@@ -86,14 +89,14 @@ export default function Payments({ onMenuClick }) {
                     <td className="px-4 py-2 font-mono text-xs text-brand-slate">{p.school_year || '—'}</td>
                     <td className="px-4 py-2 text-brand-slate max-w-[150px] truncate">{p.notes || '—'}</td>
                     <td className="px-4 py-2">
-                      <div className="flex gap-1">
+                      {canEdit && <div className="flex gap-1">
                         <button onClick={() => { setEditing(p.id); setForm({ student_id: p.student_id, amount: p.amount, date: p.date, method: p.method, receipt_no: p.receipt_no || '', school_year: p.school_year || getCurrentSchoolYear(), notes: p.notes || '' }); setModalOpen(true); }} className="text-brand-slate hover:text-status-warning p-1">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                         </button>
                         <button onClick={() => setDeleteTarget(p.id)} className="text-brand-slate hover:text-status-danger p-1">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
-                      </div>
+                      </div>}
                     </td>
                   </tr>
                 ))}

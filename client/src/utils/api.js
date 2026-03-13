@@ -1,16 +1,39 @@
 const BASE_URL = '/api';
 
 async function request(url, options = {}) {
+  const token = sessionStorage.getItem('token');
+  const headers = { 'Content-Type': 'application/json', ...options.headers };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   const res = await fetch(`${BASE_URL}${url}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
+    headers,
   });
+
+  if (res.status === 401 && !url.includes('/auth/login') && !url.includes('/auth/me')) {
+    sessionStorage.removeItem('token');
+    window.location.href = '/login';
+    return;
+  }
+
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Request failed');
   return data;
 }
 
 export const api = {
+  // Auth
+  login: (username, password) => request('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  getMe: () => request('/auth/me'),
+  changePassword: (data) => request('/auth/change-password', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Users
+  getUsers: () => request('/users'),
+  createUser: (data) => request('/users', { method: 'POST', body: JSON.stringify(data) }),
+  updateUser: (id, data) => request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteUser: (id) => request(`/users/${id}`, { method: 'DELETE' }),
+  resetUserPassword: (id, data) => request(`/users/${id}/reset-password`, { method: 'POST', body: JSON.stringify(data) }),
+
   // Students
   getStudents: (params = {}) => {
     const qs = new URLSearchParams(params).toString();

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { generateTuitionObligations } = require('../utils/generateTuition');
+const { requireRole } = require('../middleware/role');
 
 // GET /api/students
 router.get('/', (req, res) => {
@@ -78,7 +79,7 @@ router.get('/:studentId', (req, res) => {
 });
 
 // POST /api/students
-router.post('/', (req, res) => {
+router.post('/', requireRole('Admin', 'Registrar'), (req, res) => {
   try {
     const { student_id, first_name, middle_name, last_name, grade_level, section, status, email, phone, guardian, guardian_phone, scholarship, date_enrolled, address, payment_term, total_tuition, school_year } = req.body;
     if (!student_id || !first_name || !last_name || !grade_level) {
@@ -137,7 +138,7 @@ router.post('/', (req, res) => {
 });
 
 // PUT /api/students/:studentId
-router.put('/:studentId', (req, res) => {
+router.put('/:studentId', requireRole('Admin', 'Registrar'), (req, res) => {
   try {
     const existing = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
     if (!existing) return res.status(404).json({ error: 'Student not found' });
@@ -185,7 +186,7 @@ router.put('/:studentId', (req, res) => {
 });
 
 // DELETE /api/students/:studentId
-router.delete('/:studentId', (req, res) => {
+router.delete('/:studentId', requireRole('Admin', 'Registrar'), (req, res) => {
   try {
     const existing = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
     if (!existing) return res.status(404).json({ error: 'Student not found' });

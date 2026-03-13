@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { requireRole } = require('../middleware/role');
 
 // GET /api/fee-types
 router.get('/', (req, res) => {
@@ -13,7 +14,7 @@ router.get('/', (req, res) => {
 });
 
 // POST /api/fee-types
-router.post('/', (req, res) => {
+router.post('/', requireRole('Admin', 'Registrar'), (req, res) => {
   try {
     const { name } = req.body;
     if (!name || !name.trim()) {
@@ -39,7 +40,7 @@ router.post('/', (req, res) => {
 });
 
 // PUT /api/fee-types/:id
-router.put('/:id', (req, res) => {
+router.put('/:id', requireRole('Admin', 'Registrar'), (req, res) => {
   try {
     const { id } = req.params;
     const { name } = req.body;
@@ -68,7 +69,7 @@ router.put('/:id', (req, res) => {
 });
 
 // DELETE /api/fee-types/:id
-router.delete('/:id', (req, res) => {
+router.delete('/:id', requireRole('Admin', 'Registrar'), (req, res) => {
   try {
     const { id } = req.params;
 

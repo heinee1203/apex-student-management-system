@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { requireRole } = require('../middleware/role');
 
 const GRADE_ORDER = `CASE grade_level
   WHEN 'Nursery 1' THEN 1
@@ -32,7 +33,7 @@ router.get('/', (req, res) => {
 });
 
 // PUT /api/tuition-schedule
-router.put('/', (req, res) => {
+router.put('/', requireRole('Admin', 'Registrar'), (req, res) => {
   try {
     const { school_year, rates } = req.body;
     if (!school_year || !Array.isArray(rates)) {
@@ -79,7 +80,7 @@ router.get('/school-years', (req, res) => {
 });
 
 // POST /api/tuition-schedule/copy
-router.post('/copy', (req, res) => {
+router.post('/copy', requireRole('Admin', 'Registrar'), (req, res) => {
   try {
     const { from_school_year, to_school_year } = req.body;
     if (!from_school_year || !to_school_year) {
