@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Sidebar from './components/Sidebar';
 import { ToastProvider } from './components/Toast';
+import PinDialog from './components/PinDialog';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Students from './pages/Students';
@@ -14,6 +15,24 @@ import SOAPrintPage from './pages/SOAPrintPage';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Users from './pages/Users';
+
+function PinGate({ children, onMenuClick }) {
+  const { settingsUnlocked, unlockSettings, hasRole } = useAuth();
+  const navigate = useNavigate();
+
+  if (!hasRole('Admin')) return <Navigate to="/" replace />;
+
+  if (!settingsUnlocked) {
+    return (
+      <PinDialog
+        onSuccess={unlockSettings}
+        onCancel={() => navigate(-1)}
+      />
+    );
+  }
+
+  return typeof children === 'function' ? children() : children;
+}
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -53,8 +72,16 @@ export default function App() {
                   <Route path="/payments" element={<Payments onMenuClick={() => setSidebarOpen(true)} />} />
                   <Route path="/soa" element={<StatementOfAccount onMenuClick={() => setSidebarOpen(true)} />} />
                   <Route path="/reports" element={<Reports onMenuClick={() => setSidebarOpen(true)} />} />
-                  <Route path="/settings" element={hasRole('Admin') ? <Settings onMenuClick={() => setSidebarOpen(true)} /> : <Navigate to="/" replace />} />
-                  <Route path="/users" element={hasRole('Admin') ? <Users onMenuClick={() => setSidebarOpen(true)} /> : <Navigate to="/" replace />} />
+                  <Route path="/settings" element={
+                    <PinGate>
+                      <Settings onMenuClick={() => setSidebarOpen(true)} />
+                    </PinGate>
+                  } />
+                  <Route path="/users" element={
+                    <PinGate>
+                      <Users onMenuClick={() => setSidebarOpen(true)} />
+                    </PinGate>
+                  } />
                 </Routes>
               </main>
             </div>

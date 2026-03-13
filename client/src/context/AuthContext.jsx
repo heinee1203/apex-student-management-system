@@ -7,6 +7,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(() => sessionStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
+  const [settingsUnlocked, setSettingsUnlocked] = useState(false);
 
   useEffect(() => {
     if (token) {
@@ -37,7 +38,10 @@ export function AuthProvider({ children }) {
     sessionStorage.removeItem('token');
     setToken(null);
     setUser(null);
+    setSettingsUnlocked(false);
   };
+
+  const unlockSettings = () => setSettingsUnlocked(true);
 
   const hasRole = (...roles) => user && roles.includes(user.role);
 
@@ -49,6 +53,8 @@ export function AuthProvider({ children }) {
     logout,
     isAuthenticated: !!user,
     hasRole,
+    settingsUnlocked,
+    unlockSettings,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
