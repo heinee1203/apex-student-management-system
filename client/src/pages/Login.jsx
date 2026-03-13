@@ -35,7 +35,7 @@ export default function Login() {
           {/* Logo & Title */}
           <div className="text-center mb-8">
             <img src="/apex-logo.png" alt="Apex Learning Academy" className="w-16 h-16 rounded-full mx-auto mb-3 object-cover shadow-md" />
-            <h1 className="text-lg font-bold text-[#1E293B] tracking-wide">Apex Learning Academy</h1>
+            <h1 className="text-lg font-bold text-[#1E293B] tracking-wide">Apex Learning Academy, Inc.</h1>
             <p className="text-xs text-[#64748B] mt-0.5">Student Management System</p>
           </div>
 

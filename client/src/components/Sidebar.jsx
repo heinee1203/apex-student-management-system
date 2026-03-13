@@ -25,7 +25,7 @@ export default function Sidebar({ isOpen, onClose, onLogout }) {
       <aside className={`no-print fixed lg:static inset-y-0 left-0 z-50 w-64 bg-[#1E293B] flex flex-col transition-transform lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-5 border-b border-white/10 text-center">
           <img src="/apex-logo.png" alt="Apex Learning Academy" className="w-12 h-12 rounded-full mx-auto mb-2 object-cover" />
-          <h1 className="text-sm font-bold text-white tracking-wide">Apex Learning Academy</h1>
+          <h1 className="text-sm font-bold text-white tracking-wide">Apex Learning Academy, Inc.</h1>
           <p className="text-xs text-[#94A3B8] mt-0.5">Student Management System</p>
         </div>
         <nav className="flex-1 py-4 overflow-y-auto">
