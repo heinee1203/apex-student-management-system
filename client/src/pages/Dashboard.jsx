@@ -34,7 +34,7 @@ export default function Dashboard({ onMenuClick }) {
       <TopBar title="Dashboard" onMenuClick={onMenuClick} />
       <div className="p-6 space-y-6">
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           <StatCard label="Enrolled Students" value={stats?.totalStudents || 0} color="cyan" />
           <StatCard label="Total Fees" value={formatCurrency(stats?.totalFees)} color="blue" />
           <StatCard label="Total Collected" value={formatCurrency(stats?.totalCollected)} color="emerald" />

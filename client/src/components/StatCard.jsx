@@ -9,12 +9,12 @@ export default function StatCard({ label, value, sub, icon, color = 'cyan' }) {
   };
 
   return (
-    <div className={`bg-white border border-brand-border border-l-4 ${colors[color]} rounded-xl p-4 shadow-sm`}>
+    <div className={`bg-white border border-brand-border border-l-4 ${colors[color]} rounded-xl p-4 shadow-sm min-w-0 overflow-hidden`}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-brand-slate font-medium uppercase tracking-wider">{label}</span>
         {icon && <span className="text-brand-slate">{icon}</span>}
       </div>
-      <div className="text-2xl font-bold text-brand-teal font-mono">{value}</div>
+      <div className="font-bold text-brand-teal font-mono truncate" style={{ fontSize: 'clamp(1.1rem, 1.8vw, 1.5rem)' }}>{value}</div>
       {sub && <div className="text-xs text-brand-slate mt-1">{sub}</div>}
     </div>
   );
