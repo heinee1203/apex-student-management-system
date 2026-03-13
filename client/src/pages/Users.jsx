@@ -15,7 +15,7 @@ export default function Users({ onMenuClick }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [form, setForm] = useState({ username: '', password: '', fullName: '', role: 'Viewer' });
   const [resetPassword, setResetPassword] = useState('');
-  const { addToast } = useToast();
+  const addToast = useToast();
   const { user: currentUser } = useAuth();
 
   const load = () => {
