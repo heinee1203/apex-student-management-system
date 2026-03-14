@@ -127,18 +127,7 @@ router.post('/', requireRole('Admin', 'Registrar'), (req, res) => {
   }
 });
 
-// POST /api/students/:studentId/enroll — Enroll a single student
-router.post('/:studentId/enroll', requireRole('Admin', 'Registrar'), (req, res) => {
-  try {
-    const result = db.transaction(() => enrollStudent(req.params.studentId, db))();
-    const student = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
-    res.json({ ...student, enrolled: true, tuitionCount: result.tuitionCount, otherFeesCount: result.otherFeesCount });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// POST /api/students/bulk-enroll — Enroll multiple students
+// POST /api/students/bulk-enroll — Enroll multiple students (before parameterized routes)
 router.post('/bulk-enroll', requireRole('Admin', 'Registrar'), (req, res) => {
   try {
     const { studentIds } = req.body;
@@ -161,6 +150,63 @@ router.post('/bulk-enroll', requireRole('Admin', 'Registrar'), (req, res) => {
 
     const enrolled = results.filter(r => r.success).length;
     res.json({ enrolled, total: studentIds.length, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/students/:studentId/enroll — Enroll a single student
+router.post('/:studentId/enroll', requireRole('Admin', 'Registrar'), (req, res) => {
+  try {
+    const result = db.transaction(() => enrollStudent(req.params.studentId, db))();
+    const student = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
+    res.json({ ...student, enrolled: true, tuitionCount: result.tuitionCount, otherFeesCount: result.otherFeesCount });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/students/:studentId/photo — Upload student photo
+router.post('/:studentId/photo', requireRole('Admin', 'Registrar'), upload.single('photo'), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No photo uploaded or invalid file type' });
+
+    const student = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
+    if (!student) {
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    // Delete old photo if exists
+    if (student.photo_url) {
+      const oldFilename = path.basename(student.photo_url);
+      const oldPath = path.join(UPLOADS_DIR, oldFilename);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+
+    const photoUrl = `/uploads/photos/${req.file.filename}`;
+    db.prepare('UPDATE students SET photo_url = ? WHERE student_id = ?').run(photoUrl, req.params.studentId);
+
+    res.json({ photo_url: photoUrl });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/students/:studentId/photo — Remove student photo
+router.delete('/:studentId/photo', requireRole('Admin', 'Registrar'), (req, res) => {
+  try {
+    const student = db.prepare('SELECT photo_url FROM students WHERE student_id = ?').get(req.params.studentId);
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    if (student.photo_url) {
+      const filename = path.basename(student.photo_url);
+      const filePath = path.join(UPLOADS_DIR, filename);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      db.prepare('UPDATE students SET photo_url = NULL WHERE student_id = ?').run(req.params.studentId);
+    }
+
+    res.json({ message: 'Photo removed' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -209,52 +255,6 @@ router.put('/:studentId', requireRole('Admin', 'Registrar'), (req, res) => {
 
     const updated = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
     res.json(updated);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/students/:studentId/photo — Upload student photo
-router.post('/:studentId/photo', requireRole('Admin', 'Registrar'), upload.single('photo'), (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: 'No photo uploaded or invalid file type' });
-
-    const student = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
-    if (!student) {
-      fs.unlinkSync(req.file.path);
-      return res.status(404).json({ error: 'Student not found' });
-    }
-
-    // Delete old photo if exists
-    if (student.photo_url) {
-      const oldFilename = path.basename(student.photo_url);
-      const oldPath = path.join(UPLOADS_DIR, oldFilename);
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-    }
-
-    const photoUrl = `/uploads/photos/${req.file.filename}`;
-    db.prepare('UPDATE students SET photo_url = ? WHERE student_id = ?').run(photoUrl, req.params.studentId);
-
-    res.json({ photo_url: photoUrl });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// DELETE /api/students/:studentId/photo — Remove student photo
-router.delete('/:studentId/photo', requireRole('Admin', 'Registrar'), (req, res) => {
-  try {
-    const student = db.prepare('SELECT photo_url FROM students WHERE student_id = ?').get(req.params.studentId);
-    if (!student) return res.status(404).json({ error: 'Student not found' });
-
-    if (student.photo_url) {
-      const filename = path.basename(student.photo_url);
-      const filePath = path.join(UPLOADS_DIR, filename);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      db.prepare('UPDATE students SET photo_url = NULL WHERE student_id = ?').run(req.params.studentId);
-    }
-
-    res.json({ message: 'Photo removed' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
