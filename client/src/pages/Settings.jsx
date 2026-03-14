@@ -63,6 +63,11 @@ export default function Settings({ onMenuClick }) {
   const [dfForm, setDfForm] = useState({ grade_level: 'ALL', fee_type: '', amount: '', description: '' });
   const [dfDeleteTarget, setDfDeleteTarget] = useState(null);
 
+  // Tab 5: School Year Management
+  const [endYearConfirm, setEndYearConfirm] = useState('');
+  const [promoteStudents, setPromoteStudents] = useState(true);
+  const [endingYear, setEndingYear] = useState(false);
+
   useEffect(() => {
     api.getSettings().then(setSettings).catch(console.error).finally(() => setLoading(false));
   }, []);
@@ -337,13 +342,6 @@ export default function Settings({ onMenuClick }) {
     }
   }, [activeTab]);
 
-  if (loading) return <div className="flex items-center justify-center h-full text-brand-slate">Loading...</div>;
-
-  // Tab 5: School Year Management
-  const [endYearConfirm, setEndYearConfirm] = useState('');
-  const [promoteStudents, setPromoteStudents] = useState(true);
-  const [endingYear, setEndingYear] = useState(false);
-
   const handleEndSchoolYear = async () => {
     if (endYearConfirm !== 'CONFIRM') return;
     try {
@@ -357,6 +355,8 @@ export default function Settings({ onMenuClick }) {
       setEndingYear(false);
     }
   };
+
+  if (loading) return <div className="flex items-center justify-center h-full text-brand-slate">Loading...</div>;
 
   const tabs = [
     { id: 'school', label: 'School Information' },
