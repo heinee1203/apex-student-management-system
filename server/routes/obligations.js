@@ -25,7 +25,7 @@ router.get('/', (req, res) => {
 });
 
 // POST /api/obligations/bulk
-router.post('/bulk', requireRole('Admin', 'Registrar'), (req, res) => {
+router.post('/bulk', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
     const { grade_level, school_year, fee_type, amount, due_date, description } = req.body;
     if (!grade_level || !school_year || !fee_type || !amount) {
@@ -70,7 +70,7 @@ router.get('/:id', (req, res) => {
 });
 
 // POST /api/obligations
-router.post('/', requireRole('Admin', 'Registrar'), (req, res) => {
+router.post('/', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
     const { student_id, fee_type, payment_term, installment_number, school_year, amount, due_date, description } = req.body;
     if (!student_id || !fee_type || !school_year || !amount) {
@@ -93,7 +93,7 @@ router.post('/', requireRole('Admin', 'Registrar'), (req, res) => {
 });
 
 // PUT /api/obligations/:id
-router.put('/:id', requireRole('Admin', 'Registrar'), (req, res) => {
+router.put('/:id', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
     const existing = db.prepare('SELECT * FROM obligations WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Obligation not found' });
@@ -118,7 +118,7 @@ router.put('/:id', requireRole('Admin', 'Registrar'), (req, res) => {
 });
 
 // DELETE /api/obligations/:id
-router.delete('/:id', requireRole('Admin', 'Registrar'), (req, res) => {
+router.delete('/:id', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
     const existing = db.prepare('SELECT * FROM obligations WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Obligation not found' });

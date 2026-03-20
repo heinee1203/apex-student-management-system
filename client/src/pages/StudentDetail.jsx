@@ -6,6 +6,7 @@ import StatusBadge from '../components/StatusBadge';
 import PayStatusBadge from '../components/PayStatusBadge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
+import InlineEdit from '../components/InlineEdit';
 import { api } from '../utils/api';
 import { formatCurrency, formatDate } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
@@ -17,7 +18,7 @@ export default function StudentDetail({ onMenuClick }) {
   const navigate = useNavigate();
   const addToast = useToast();
   const { hasRole } = useAuth();
-  const canEdit = hasRole('Admin', 'Registrar');
+  const canEdit = hasRole('Admin', 'Registrar', 'Treasurer');
 
   const [student, setStudent] = useState(null);
   const [obligations, setObligations] = useState([]);
@@ -147,6 +148,16 @@ export default function StudentDetail({ onMenuClick }) {
     }
   };
 
+  const handleInlineSave = async (field, value) => {
+    try {
+      await api.updateStudent(studentId, { [field]: value || null });
+      addToast('Student updated');
+      load();
+    } catch (err) {
+      addToast(err.message, 'error');
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center h-full text-brand-slate">Loading...</div>;
   if (!student) return <div className="flex items-center justify-center h-full text-brand-slate">Student not found</div>;
 
@@ -208,15 +219,39 @@ export default function StudentDetail({ onMenuClick }) {
           <div className="bg-white border border-brand-border rounded-xl p-5">
             <h3 className="text-sm font-semibold text-brand-teal mb-4">Personal Information</h3>
             <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="text-xs text-brand-slate">LRN</span>
+                <InlineEdit value={student.lrn} onSave={v => handleInlineSave('lrn', v)} canEdit={canEdit} />
+              </div>
+              <div>
+                <span className="text-xs text-brand-slate">Birth Date</span>
+                <InlineEdit value={student.birth_date} onSave={v => handleInlineSave('birth_date', v)} type="date" canEdit={canEdit} />
+              </div>
+              <div>
+                <span className="text-xs text-brand-slate">Gender</span>
+                <InlineEdit value={student.gender} onSave={v => handleInlineSave('gender', v)} type="select" options={['Male', 'Female']} canEdit={canEdit} />
+              </div>
+              <div>
+                <span className="text-xs text-brand-slate">Email</span>
+                <InlineEdit value={student.email} onSave={v => handleInlineSave('email', v)} type="email" canEdit={canEdit} />
+              </div>
+              <div>
+                <span className="text-xs text-brand-slate">Phone</span>
+                <InlineEdit value={student.phone} onSave={v => handleInlineSave('phone', v)} canEdit={canEdit} />
+              </div>
+              <div>
+                <span className="text-xs text-brand-slate">Parent's Name</span>
+                <InlineEdit value={student.parent_name} onSave={v => handleInlineSave('parent_name', v)} canEdit={canEdit} />
+              </div>
+              <div>
+                <span className="text-xs text-brand-slate">Guardian</span>
+                <InlineEdit value={student.guardian} onSave={v => handleInlineSave('guardian', v)} canEdit={canEdit} />
+              </div>
+              <div>
+                <span className="text-xs text-brand-slate">Guardian Phone</span>
+                <InlineEdit value={student.guardian_phone} onSave={v => handleInlineSave('guardian_phone', v)} canEdit={canEdit} />
+              </div>
               {[
-                ['LRN', student.lrn],
-                ['Birth Date', formatDate(student.birth_date)],
-                ['Gender', student.gender],
-                ['Email', student.email],
-                ['Phone', student.phone],
-                ['Parent\'s Name', student.parent_name],
-                ['Guardian', student.guardian],
-                ['Guardian Phone', student.guardian_phone],
                 ['Scholarship', student.scholarship],
                 ['Date Enrolled', formatDate(student.date_enrolled)],
                 ['Payment Term', student.payment_term],

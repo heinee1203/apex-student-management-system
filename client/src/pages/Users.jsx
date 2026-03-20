@@ -89,6 +89,7 @@ export default function Users({ onMenuClick }) {
     const colors = {
       Admin: 'bg-purple-100 text-purple-700',
       Registrar: 'bg-blue-100 text-blue-700',
+      Treasurer: 'bg-emerald-100 text-emerald-700',
       Viewer: 'bg-gray-100 text-gray-700',
     };
     return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${colors[role] || colors.Viewer}`}>{role}</span>;
@@ -197,6 +198,7 @@ export default function Users({ onMenuClick }) {
             >
               <option value="Admin">Admin</option>
               <option value="Registrar">Registrar</option>
+              <option value="Treasurer">Treasurer</option>
               <option value="Viewer">Viewer</option>
             </select>
           </div>

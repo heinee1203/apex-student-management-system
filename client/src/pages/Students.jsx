@@ -38,7 +38,7 @@ export default function Students({ onMenuClick }) {
   const addToast = useToast();
   const navigate = useNavigate();
   const { hasRole } = useAuth();
-  const canEdit = hasRole('Admin', 'Registrar');
+  const canEdit = hasRole('Admin', 'Registrar', 'Treasurer');
 
   const load = () => {
     setLoading(true);

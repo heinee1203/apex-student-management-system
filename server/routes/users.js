@@ -23,9 +23,9 @@ router.post('/', (req, res) => {
     if (password.length < 6) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
-    const validRoles = ['Admin', 'Registrar', 'Viewer'];
+    const validRoles = ['Admin', 'Registrar', 'Treasurer', 'Viewer'];
     if (role && !validRoles.includes(role)) {
-      return res.status(400).json({ error: 'Role must be Admin, Registrar, or Viewer' });
+      return res.status(400).json({ error: 'Role must be Admin, Registrar, Treasurer, or Viewer' });
     }
 
     const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);

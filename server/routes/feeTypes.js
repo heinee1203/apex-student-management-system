@@ -14,7 +14,7 @@ router.get('/', (req, res) => {
 });
 
 // POST /api/fee-types
-router.post('/', requireRole('Admin', 'Registrar'), (req, res) => {
+router.post('/', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
     const { name } = req.body;
     if (!name || !name.trim()) {
@@ -40,7 +40,7 @@ router.post('/', requireRole('Admin', 'Registrar'), (req, res) => {
 });
 
 // PUT /api/fee-types/:id
-router.put('/:id', requireRole('Admin', 'Registrar'), (req, res) => {
+router.put('/:id', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
     const { id } = req.params;
     const { name } = req.body;
@@ -69,7 +69,7 @@ router.put('/:id', requireRole('Admin', 'Registrar'), (req, res) => {
 });
 
 // DELETE /api/fee-types/:id
-router.delete('/:id', requireRole('Admin', 'Registrar'), (req, res) => {
+router.delete('/:id', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
     const { id } = req.params;
 

@@ -35,7 +35,7 @@ router.get('/:id', (req, res) => {
 });
 
 // POST /api/payments
-router.post('/', requireRole('Admin', 'Registrar'), (req, res) => {
+router.post('/', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
     const { student_id, amount, date, method, receipt_no, school_year, notes } = req.body;
     if (!student_id || !amount || !date || !method) {
@@ -66,7 +66,7 @@ router.post('/', requireRole('Admin', 'Registrar'), (req, res) => {
 });
 
 // PUT /api/payments/:id
-router.put('/:id', requireRole('Admin', 'Registrar'), (req, res) => {
+router.put('/:id', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
     const existing = db.prepare('SELECT * FROM payments WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Payment not found' });
@@ -90,7 +90,7 @@ router.put('/:id', requireRole('Admin', 'Registrar'), (req, res) => {
 });
 
 // DELETE /api/payments/:id
-router.delete('/:id', requireRole('Admin', 'Registrar'), (req, res) => {
+router.delete('/:id', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
     const existing = db.prepare('SELECT * FROM payments WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Payment not found' });

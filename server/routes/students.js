@@ -105,7 +105,7 @@ router.get('/:studentId', (req, res) => {
 });
 
 // POST /api/students — Register (no auto-enrollment, no fee generation)
-router.post('/', requireRole('Admin', 'Registrar'), (req, res) => {
+router.post('/', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
     const { student_id, first_name, middle_name, last_name, grade_level, section, status, email, phone, guardian, guardian_phone, scholarship, date_enrolled, address, payment_term, total_tuition, school_year, lrn, birth_date, gender, parent_name } = req.body;
     if (!student_id || !first_name || !last_name || !grade_level) {
@@ -128,7 +128,7 @@ router.post('/', requireRole('Admin', 'Registrar'), (req, res) => {
 });
 
 // POST /api/students/bulk-enroll — Enroll multiple students (before parameterized routes)
-router.post('/bulk-enroll', requireRole('Admin', 'Registrar'), (req, res) => {
+router.post('/bulk-enroll', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
     const { studentIds } = req.body;
     if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
@@ -156,7 +156,7 @@ router.post('/bulk-enroll', requireRole('Admin', 'Registrar'), (req, res) => {
 });
 
 // POST /api/students/:studentId/enroll — Enroll a single student
-router.post('/:studentId/enroll', requireRole('Admin', 'Registrar'), (req, res) => {
+router.post('/:studentId/enroll', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
     const result = db.transaction(() => enrollStudent(req.params.studentId, db))();
     const student = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
@@ -167,7 +167,7 @@ router.post('/:studentId/enroll', requireRole('Admin', 'Registrar'), (req, res) 
 });
 
 // POST /api/students/:studentId/photo — Upload student photo
-router.post('/:studentId/photo', requireRole('Admin', 'Registrar'), upload.single('photo'), (req, res) => {
+router.post('/:studentId/photo', requireRole('Admin', 'Registrar', 'Treasurer'), upload.single('photo'), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No photo uploaded or invalid file type' });
 
@@ -194,7 +194,7 @@ router.post('/:studentId/photo', requireRole('Admin', 'Registrar'), upload.singl
 });
 
 // DELETE /api/students/:studentId/photo — Remove student photo
-router.delete('/:studentId/photo', requireRole('Admin', 'Registrar'), (req, res) => {
+router.delete('/:studentId/photo', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
     const student = db.prepare('SELECT photo_url FROM students WHERE student_id = ?').get(req.params.studentId);
     if (!student) return res.status(404).json({ error: 'Student not found' });
@@ -213,7 +213,7 @@ router.delete('/:studentId/photo', requireRole('Admin', 'Registrar'), (req, res)
 });
 
 // PUT /api/students/:studentId
-router.put('/:studentId', requireRole('Admin', 'Registrar'), (req, res) => {
+router.put('/:studentId', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
     const existing = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
     if (!existing) return res.status(404).json({ error: 'Student not found' });
@@ -262,7 +262,7 @@ router.put('/:studentId', requireRole('Admin', 'Registrar'), (req, res) => {
 });
 
 // DELETE /api/students/:studentId
-router.delete('/:studentId', requireRole('Admin', 'Registrar'), (req, res) => {
+router.delete('/:studentId', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
     const existing = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
     if (!existing) return res.status(404).json({ error: 'Student not found' });

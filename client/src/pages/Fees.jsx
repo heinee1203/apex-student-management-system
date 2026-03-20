@@ -21,7 +21,7 @@ export default function Fees({ onMenuClick }) {
   const [gradeLevel, setGradeLevel] = useState('');
   const addToast = useToast();
   const { hasRole } = useAuth();
-  const canEdit = hasRole('Admin', 'Registrar');
+  const canEdit = hasRole('Admin', 'Registrar', 'Treasurer');
 
   const GRADE_LEVELS = ['Nursery 1', 'Nursery 2', 'Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
   const gradeCount = assignTo === 'grade' && gradeLevel ? students.filter(s => s.grade_level === gradeLevel && s.status === 'Enrolled' && s.school_year === form.school_year).length : 0;

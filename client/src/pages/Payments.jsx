@@ -19,7 +19,7 @@ export default function Payments({ onMenuClick }) {
   const [form, setForm] = useState({ student_id: '', amount: '', date: '', method: 'Cash', receipt_no: '', school_year: getCurrentSchoolYear(), notes: '' });
   const addToast = useToast();
   const { hasRole } = useAuth();
-  const canEdit = hasRole('Admin', 'Registrar');
+  const canEdit = hasRole('Admin', 'Registrar', 'Treasurer');
 
   const load = () => {
     setLoading(true);
