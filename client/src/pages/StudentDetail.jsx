@@ -39,7 +39,10 @@ export default function StudentDetail({ onMenuClick }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteType, setDeleteType] = useState('');
   const [enrolling, setEnrolling] = useState(false);
+  const [editingTuition, setEditingTuition] = useState(false);
+  const [tuitionValue, setTuitionValue] = useState('');
   const photoInputRef = useRef(null);
+  const isAdmin = hasRole('Admin');
 
   const load = async () => {
     try {
@@ -129,6 +132,21 @@ export default function StudentDetail({ onMenuClick }) {
     }
   };
 
+  const handleTuitionSave = async () => {
+    const newAmount = parseFloat(tuitionValue);
+    if (isNaN(newAmount) || newAmount < 0) { addToast('Invalid amount', 'error'); return; }
+    const oldAmount = student.total_tuition || 0;
+    if (!window.confirm(`Changing tuition from ${formatCurrency(oldAmount)} to ${formatCurrency(newAmount)} will regenerate tuition installments. Existing tuition obligations will be replaced. Payments already recorded will remain. Continue?`)) return;
+    try {
+      await api.updateStudent(studentId, { total_tuition: newAmount, payment_term: student.payment_term, school_year: student.school_year });
+      addToast('Tuition updated and installments regenerated');
+      setEditingTuition(false);
+      load();
+    } catch (err) {
+      addToast(err.message, 'error');
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center h-full text-brand-slate">Loading...</div>;
   if (!student) return <div className="flex items-center justify-center h-full text-brand-slate">Student not found</div>;
 
@@ -202,7 +220,32 @@ export default function StudentDetail({ onMenuClick }) {
                 ['Scholarship', student.scholarship],
                 ['Date Enrolled', formatDate(student.date_enrolled)],
                 ['Payment Term', student.payment_term],
-                ['Total Tuition', student.total_tuition ? formatCurrency(student.total_tuition) : null],
+              ].map(([label, val]) => (
+                <div key={label}>
+                  <span className="text-xs text-brand-slate">{label}</span>
+                  <p className="text-brand-navy">{val || '—'}</p>
+                </div>
+              ))}
+              <div>
+                <span className="text-xs text-brand-slate">Total Tuition</span>
+                {editingTuition ? (
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <input type="number" step="0.01" value={tuitionValue} onChange={e => setTuitionValue(e.target.value)} className="w-28 bg-white border border-brand-border rounded px-2 py-0.5 text-sm text-brand-navy focus:outline-none focus:border-brand-steel" autoFocus />
+                    <button onClick={handleTuitionSave} className="text-xs bg-brand-steel hover:bg-brand-teal text-white px-2 py-0.5 rounded">Save</button>
+                    <button onClick={() => setEditingTuition(false)} className="text-xs text-brand-slate hover:text-brand-navy px-1 py-0.5">Cancel</button>
+                  </div>
+                ) : (
+                  <p className="text-brand-navy flex items-center gap-1">
+                    {student.total_tuition ? formatCurrency(student.total_tuition) : '—'}
+                    {isAdmin && (
+                      <button onClick={() => { setTuitionValue(student.total_tuition || 0); setEditingTuition(true); }} className="text-brand-slate hover:text-status-warning p-0.5" title="Edit tuition">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                      </button>
+                    )}
+                  </p>
+                )}
+              </div>
+              {[
                 ['School Year', student.school_year],
                 ['Address', student.address],
               ].map(([label, val]) => (
