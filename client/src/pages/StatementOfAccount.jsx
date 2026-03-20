@@ -10,7 +10,10 @@ export default function StatementOfAccount({ onMenuClick }) {
   const navigate = useNavigate();
   const [students, setStudents] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(searchParams.get('student') || '');
+  const [gradeFilter, setGradeFilter] = useState('all');
   const schoolYear = getCurrentSchoolYear();
+  const gradeLevels = ['Nursery 1', 'Nursery 2', 'Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
+  const filteredStudents = gradeFilter === 'all' ? students : students.filter(s => s.grade_level === gradeFilter);
   const addToast = useToast();
 
   useEffect(() => {
@@ -36,10 +39,17 @@ export default function StatementOfAccount({ onMenuClick }) {
           <h3 className="text-lg font-semibold text-brand-navy mb-6">Generate Statement of Account</h3>
           <div className="space-y-4">
             <div>
+              <label className="block text-xs text-brand-slate mb-1">Grade Level</label>
+              <select value={gradeFilter} onChange={e => { setGradeFilter(e.target.value); setSelectedStudent(''); }} className="w-full bg-white border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-navy focus:outline-none focus:border-brand-steel">
+                <option value="all">All Grade Levels</option>
+                {gradeLevels.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+            <div>
               <label className="block text-xs text-brand-slate mb-1">Select Student *</label>
               <select value={selectedStudent} onChange={e => setSelectedStudent(e.target.value)} className="w-full bg-white border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-navy focus:outline-none focus:border-brand-steel">
                 <option value="">Search by name or ID...</option>
-                {students.map(s => <option key={s.student_id} value={s.student_id}>{s.last_name}, {s.first_name} — {s.student_id}</option>)}
+                {filteredStudents.map(s => <option key={s.student_id} value={s.student_id}>{s.last_name}, {s.first_name} — {s.student_id}</option>)}
               </select>
             </div>
             <div className="flex items-center gap-2 text-sm">
