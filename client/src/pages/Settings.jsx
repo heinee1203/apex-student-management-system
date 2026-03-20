@@ -443,8 +443,8 @@ export default function Settings({ onMenuClick }) {
                   <tr className="bg-brand-light text-xs text-brand-slate border-b border-brand-border">
                     <th className="px-4 py-3 text-left font-medium">Grade Level</th>
                     <th className="px-4 py-3 text-right font-medium">Annual Rate (&#8369;)</th>
-                    <th className="px-4 py-3 text-right font-medium">Monthly Rate (&#8369;)</th>
                     <th className="px-4 py-3 text-right font-medium">Quarterly Rate (&#8369;)</th>
+                    <th className="px-4 py-3 text-right font-medium">Monthly Rate (&#8369;)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -481,8 +481,8 @@ export default function Settings({ onMenuClick }) {
                       <tr key={gl} className="border-b border-brand-border/50 hover:bg-brand-light/50">
                         <td className="px-4 py-3 text-brand-navy font-medium">{gl}</td>
                         <td className="px-4 py-3 text-right">{renderCell('annual_rate')}</td>
-                        <td className="px-4 py-3 text-right">{renderCell('monthly_rate')}</td>
                         <td className="px-4 py-3 text-right">{renderCell('quarterly_rate')}</td>
+                        <td className="px-4 py-3 text-right">{renderCell('monthly_rate')}</td>
                       </tr>
                     );
                   })}
