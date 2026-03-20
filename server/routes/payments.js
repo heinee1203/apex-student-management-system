@@ -7,7 +7,7 @@ const { requireRole } = require('../middleware/role');
 router.get('/', (req, res) => {
   try {
     const { student_id, school_year } = req.query;
-    let sql = `SELECT p.*, s.first_name, s.last_name, s.middle_name
+    let sql = `SELECT p.*, s.first_name, s.last_name, s.middle_name, s.grade_level
       FROM payments p
       JOIN students s ON p.student_id = s.student_id
       WHERE 1=1`;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import TopBar from '../components/TopBar';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -9,6 +9,17 @@ import { getCurrentSchoolYear } from '../utils/schoolYear';
 import { useAuth } from '../context/AuthContext';
 
 const methods = ['Cash', 'GCash', 'Maya', 'Bank Transfer', 'Check', 'Installment Plan'];
+const gradeLevels = ['Nursery 1', 'Nursery 2', 'Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
+const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+// Philippine school year quarters
+const quarters = [
+  { label: 'Q1 (Jun–Aug)', months: [5, 6, 7] },
+  { label: 'Q2 (Sep–Nov)', months: [8, 9, 10] },
+  { label: 'Q3 (Dec–Feb)', months: [11, 0, 1] },
+  { label: 'Q4 (Mar–May)', months: [2, 3, 4] },
+];
+
 export default function Payments({ onMenuClick }) {
   const [payments, setPayments] = useState([]);
   const [students, setStudents] = useState([]);
@@ -21,6 +32,13 @@ export default function Payments({ onMenuClick }) {
   const { hasRole } = useAuth();
   const canEdit = hasRole('Admin', 'Registrar', 'Treasurer');
 
+  // Filters
+  const [filterGrade, setFilterGrade] = useState('');
+  const [filterMonth, setFilterMonth] = useState('');
+  const [filterQuarter, setFilterQuarter] = useState('');
+  const [filterMethod, setFilterMethod] = useState('');
+  const [filterSY, setFilterSY] = useState('');
+
   const load = () => {
     setLoading(true);
     Promise.all([api.getPayments(), api.getStudents()]).then(([p, s]) => {
@@ -30,6 +48,55 @@ export default function Payments({ onMenuClick }) {
   };
 
   useEffect(() => { load(); }, []);
+
+  // Derive unique school years from payments
+  const schoolYears = useMemo(() => {
+    const sySet = new Set(payments.map(p => p.school_year).filter(Boolean));
+    return [...sySet].sort().reverse();
+  }, [payments]);
+
+  // Filtered payments
+  const filtered = useMemo(() => {
+    return payments.filter(p => {
+      if (filterGrade && p.grade_level !== filterGrade) return false;
+      if (filterMethod && p.method !== filterMethod) return false;
+      if (filterSY && p.school_year !== filterSY) return false;
+
+      if (p.date) {
+        const d = new Date(p.date);
+        const monthIdx = d.getMonth(); // 0-based
+
+        if (filterMonth) {
+          const selectedMonthIdx = months.indexOf(filterMonth);
+          if (monthIdx !== selectedMonthIdx) return false;
+        }
+
+        if (filterQuarter) {
+          const q = quarters.find(q => q.label === filterQuarter);
+          if (q && !q.months.includes(monthIdx)) return false;
+        }
+      } else {
+        if (filterMonth || filterQuarter) return false;
+      }
+
+      return true;
+    });
+  }, [payments, filterGrade, filterMonth, filterQuarter, filterMethod, filterSY]);
+
+  const filteredTotal = useMemo(() => filtered.reduce((sum, p) => sum + (p.amount || 0), 0), [filtered]);
+  const hasFilters = filterGrade || filterMonth || filterQuarter || filterMethod || filterSY;
+
+  const clearFilters = () => {
+    setFilterGrade('');
+    setFilterMonth('');
+    setFilterQuarter('');
+    setFilterMethod('');
+    setFilterSY('');
+  };
+
+  // Mutual exclusion: month clears quarter, quarter clears month
+  const handleMonthChange = (val) => { setFilterMonth(val); if (val) setFilterQuarter(''); };
+  const handleQuarterChange = (val) => { setFilterQuarter(val); if (val) setFilterMonth(''); };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -56,6 +123,8 @@ export default function Payments({ onMenuClick }) {
     } catch (err) { addToast(err.message, 'error'); }
   };
 
+  const selectClass = "bg-white border border-brand-border rounded-lg px-3 py-1.5 text-sm text-brand-navy focus:outline-none focus:border-brand-steel";
+
   return (
     <div>
       <TopBar title="Payments" onMenuClick={onMenuClick}>
@@ -63,6 +132,40 @@ export default function Payments({ onMenuClick }) {
       </TopBar>
 
       <div className="p-6">
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <select value={filterGrade} onChange={e => setFilterGrade(e.target.value)} className={selectClass}>
+            <option value="">All Grade Levels</option>
+            {gradeLevels.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+          <select value={filterMonth} onChange={e => handleMonthChange(e.target.value)} className={selectClass}>
+            <option value="">All Months</option>
+            {months.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <select value={filterQuarter} onChange={e => handleQuarterChange(e.target.value)} className={selectClass}>
+            <option value="">All Quarters</option>
+            {quarters.map(q => <option key={q.label} value={q.label}>{q.label}</option>)}
+          </select>
+          <select value={filterMethod} onChange={e => setFilterMethod(e.target.value)} className={selectClass}>
+            <option value="">All Methods</option>
+            {methods.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <select value={filterSY} onChange={e => setFilterSY(e.target.value)} className={selectClass}>
+            <option value="">All Years</option>
+            {schoolYears.map(sy => <option key={sy} value={sy}>{sy}</option>)}
+          </select>
+          {hasFilters && (
+            <button onClick={clearFilters} className="text-sm text-brand-slate hover:text-status-danger underline">Clear Filters</button>
+          )}
+        </div>
+
+        {/* Filtered summary */}
+        {hasFilters && (
+          <p className="text-sm text-brand-slate mb-3">
+            Showing <span className="font-semibold text-brand-navy">{filtered.length}</span> of <span className="font-semibold text-brand-navy">{payments.length}</span> payments · Total: <span className="font-semibold text-status-success">{formatCurrency(filteredTotal)}</span>
+          </p>
+        )}
+
         <div className="bg-white border border-brand-border rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -79,7 +182,7 @@ export default function Payments({ onMenuClick }) {
                 </tr>
               </thead>
               <tbody>
-                {payments.map(p => (
+                {filtered.map(p => (
                   <tr key={p.id} className="border-b border-brand-border/50 hover:bg-brand-light/50">
                     <td className="px-4 py-2 text-brand-navy">{formatDate(p.date)}</td>
                     <td className="px-4 py-2 text-brand-navy">{p.last_name}, {p.first_name}</td>
@@ -100,7 +203,7 @@ export default function Payments({ onMenuClick }) {
                     </td>
                   </tr>
                 ))}
-                {payments.length === 0 && !loading && <tr><td colSpan={8} className="px-4 py-8 text-center text-brand-slate">No payments found</td></tr>}
+                {filtered.length === 0 && !loading && <tr><td colSpan={8} className="px-4 py-8 text-center text-brand-slate">{hasFilters ? 'No payments match the selected filters' : 'No payments found'}</td></tr>}
               </tbody>
             </table>
           </div>
