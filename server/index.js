@@ -43,6 +43,17 @@ try {
   db.prepare('UPDATE tuition_schedule SET monthly_rate = ROUND(annual_rate / 10.0, 2), quarterly_rate = ROUND(annual_rate / 4.0, 2)').run();
 }
 
+// One-time fix: correct school year from 2024-2025 to 2025-2026
+{
+  const wrongSY = db.prepare("SELECT COUNT(*) as count FROM obligations WHERE school_year = '2024-2025'").get();
+  if (wrongSY.count > 0) {
+    db.exec("UPDATE obligations SET school_year = '2025-2026' WHERE school_year = '2024-2025'");
+    db.exec("UPDATE payments SET school_year = '2025-2026' WHERE school_year = '2024-2025'");
+    db.exec("UPDATE students SET school_year = '2025-2026' WHERE school_year = '2024-2025'");
+    console.log('Fixed school year: 2024-2025 → 2025-2026');
+  }
+}
+
 // Ensure fee_types are seeded for existing databases and add missing types
 {
   const desiredFeeTypes = [
