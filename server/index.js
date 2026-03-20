@@ -24,6 +24,16 @@ try {
   db.exec('ALTER TABLE students ADD COLUMN photo_url TEXT');
 }
 
+// Migrate students: add lrn, birth_date, gender, parent_name columns if missing
+try {
+  db.prepare('SELECT lrn FROM students LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE students ADD COLUMN lrn TEXT');
+  db.exec('ALTER TABLE students ADD COLUMN birth_date TEXT');
+  db.exec('ALTER TABLE students ADD COLUMN gender TEXT');
+  db.exec('ALTER TABLE students ADD COLUMN parent_name TEXT');
+}
+
 // Migrate tuition_schedule: add monthly_rate and quarterly_rate columns if missing
 try {
   db.prepare('SELECT monthly_rate FROM tuition_schedule LIMIT 1').get();
@@ -40,6 +50,7 @@ try {
     ['PE Uniform', 0, 4], ['Graduation Fee', 0, 5], ['Laboratory Fee', 0, 6], ['Library Fee', 0, 7],
     ['Athletic Fee', 0, 8], ['ID Fee', 0, 9], ['Insurance Fee', 0, 10], ['Development Fee', 0, 11],
     ['Energy Fee', 0, 12], ['Internet Fee', 0, 13], ['Registration Fee', 0, 14],
+    ['Recognition Fee', 0, 20], ['Moving-up Fee', 0, 21],
   ];
   const insertFT = db.prepare('INSERT OR IGNORE INTO fee_types (name, is_system, sort_order) VALUES (?, ?, ?)');
   const updateSort = db.prepare('UPDATE fee_types SET sort_order = ? WHERE name = ?');

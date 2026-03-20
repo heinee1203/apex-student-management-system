@@ -28,6 +28,7 @@ export default function SOADocument({ data }) {
         <div className="grid grid-cols-2 gap-x-8 gap-y-1 flex-1">
         <div><span className="font-semibold" style={{ color: '#2C5F6E' }}>Student Name:</span> {student.first_name} {student.middle_name ? student.middle_name + ' ' : ''}{student.last_name}</div>
         <div><span className="font-semibold" style={{ color: '#2C5F6E' }}>Student ID:</span> <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{student.student_id}</span></div>
+        <div><span className="font-semibold" style={{ color: '#2C5F6E' }}>LRN:</span> <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{student.lrn || '—'}</span></div>
         <div><span className="font-semibold" style={{ color: '#2C5F6E' }}>Grade/Year:</span> {student.grade_level}</div>
         <div><span className="font-semibold" style={{ color: '#2C5F6E' }}>Section:</span> {student.section || '—'}</div>
         <div><span className="font-semibold" style={{ color: '#2C5F6E' }}>Payment Term:</span> {payment_term || student?.payment_term || '—'}</div>

@@ -191,8 +191,12 @@ export default function StudentDetail({ onMenuClick }) {
             <h3 className="text-sm font-semibold text-brand-teal mb-4">Personal Information</h3>
             <div className="grid grid-cols-2 gap-3 text-sm">
               {[
+                ['LRN', student.lrn],
+                ['Birth Date', formatDate(student.birth_date)],
+                ['Gender', student.gender],
                 ['Email', student.email],
                 ['Phone', student.phone],
+                ['Parent\'s Name', student.parent_name],
                 ['Guardian', student.guardian],
                 ['Guardian Phone', student.guardian_phone],
                 ['Scholarship', student.scholarship],

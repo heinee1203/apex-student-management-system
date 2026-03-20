@@ -107,7 +107,7 @@ router.get('/:studentId', (req, res) => {
 // POST /api/students — Register (no auto-enrollment, no fee generation)
 router.post('/', requireRole('Admin', 'Registrar'), (req, res) => {
   try {
-    const { student_id, first_name, middle_name, last_name, grade_level, section, status, email, phone, guardian, guardian_phone, scholarship, date_enrolled, address, payment_term, total_tuition, school_year } = req.body;
+    const { student_id, first_name, middle_name, last_name, grade_level, section, status, email, phone, guardian, guardian_phone, scholarship, date_enrolled, address, payment_term, total_tuition, school_year, lrn, birth_date, gender, parent_name } = req.body;
     if (!student_id || !first_name || !last_name || !grade_level) {
       return res.status(400).json({ error: 'student_id, first_name, last_name, and grade_level are required' });
     }
@@ -116,9 +116,9 @@ router.post('/', requireRole('Admin', 'Registrar'), (req, res) => {
     if (existing) return res.status(409).json({ error: 'Student ID already exists' });
 
     db.prepare(`
-      INSERT INTO students (id, student_id, first_name, middle_name, last_name, grade_level, section, status, email, phone, guardian, guardian_phone, scholarship, date_enrolled, address, payment_term, total_tuition, school_year)
-      VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(student_id, first_name, middle_name || null, last_name, grade_level, section || null, status || 'Registered', email || null, phone || null, guardian || null, guardian_phone || null, scholarship || 'None', date_enrolled || null, address || null, payment_term || null, total_tuition || 0, school_year || null);
+      INSERT INTO students (id, student_id, first_name, middle_name, last_name, grade_level, section, status, email, phone, guardian, guardian_phone, scholarship, date_enrolled, address, payment_term, total_tuition, school_year, lrn, birth_date, gender, parent_name)
+      VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(student_id, first_name, middle_name || null, last_name, grade_level, section || null, status || 'Registered', email || null, phone || null, guardian || null, guardian_phone || null, scholarship || 'None', date_enrolled || null, address || null, payment_term || null, total_tuition || 0, school_year || null, lrn || null, birth_date || null, gender || null, parent_name || null);
 
     const student = db.prepare('SELECT * FROM students WHERE student_id = ?').get(student_id);
     res.status(201).json(student);
@@ -218,7 +218,7 @@ router.put('/:studentId', requireRole('Admin', 'Registrar'), (req, res) => {
     const existing = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
     if (!existing) return res.status(404).json({ error: 'Student not found' });
 
-    const { first_name, middle_name, last_name, grade_level, section, status, email, phone, guardian, guardian_phone, scholarship, date_enrolled, address, payment_term, total_tuition, school_year } = req.body;
+    const { first_name, middle_name, last_name, grade_level, section, status, email, phone, guardian, guardian_phone, scholarship, date_enrolled, address, payment_term, total_tuition, school_year, lrn, birth_date, gender, parent_name } = req.body;
 
     const newPaymentTerm = payment_term ?? existing.payment_term;
     const newTotalTuition = total_tuition ?? existing.total_tuition;
@@ -228,13 +228,14 @@ router.put('/:studentId', requireRole('Admin', 'Registrar'), (req, res) => {
 
     const updateStudent = db.transaction(() => {
       db.prepare(`
-        UPDATE students SET first_name = ?, middle_name = ?, last_name = ?, grade_level = ?, section = ?, status = ?, email = ?, phone = ?, guardian = ?, guardian_phone = ?, scholarship = ?, date_enrolled = ?, address = ?, payment_term = ?, total_tuition = ?, school_year = ?, updated_at = datetime('now','localtime')
+        UPDATE students SET first_name = ?, middle_name = ?, last_name = ?, grade_level = ?, section = ?, status = ?, email = ?, phone = ?, guardian = ?, guardian_phone = ?, scholarship = ?, date_enrolled = ?, address = ?, payment_term = ?, total_tuition = ?, school_year = ?, lrn = ?, birth_date = ?, gender = ?, parent_name = ?, updated_at = datetime('now','localtime')
         WHERE student_id = ?
       `).run(
         first_name || existing.first_name, middle_name ?? existing.middle_name, last_name || existing.last_name, grade_level || existing.grade_level,
         section ?? existing.section, status || existing.status, email ?? existing.email, phone ?? existing.phone,
         guardian ?? existing.guardian, guardian_phone ?? existing.guardian_phone, scholarship ?? existing.scholarship,
-        date_enrolled ?? existing.date_enrolled, address ?? existing.address, newPaymentTerm, newTotalTuition, newSchoolYear, req.params.studentId
+        date_enrolled ?? existing.date_enrolled, address ?? existing.address, newPaymentTerm, newTotalTuition, newSchoolYear,
+        lrn ?? existing.lrn, birth_date ?? existing.birth_date, gender ?? existing.gender, parent_name ?? existing.parent_name, req.params.studentId
       );
 
       if (tuitionChanged && newPaymentTerm && newTotalTuition > 0) {
