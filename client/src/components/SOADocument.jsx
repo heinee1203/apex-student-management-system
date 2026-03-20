@@ -152,7 +152,7 @@ export default function SOADocument({ data }) {
           )}
           <span className="font-bold" style={{ color: '#1E3A44' }}>TOTAL PAID:</span><span className="text-right" style={{ color: '#2E8B6A' }}>{formatCurrency(totals.totalPaid)}</span>
           <span className="font-bold" style={{ color: '#1E3A44' }}>REMAINING BALANCE:</span><span className="text-right font-bold" style={{ color: '#C0504D' }}>{formatCurrency(totals.remainingBalance || totals.balance)}</span>
-          <span className="font-bold" style={{ color: '#1E3A44' }}>STATUS:</span><span className="text-right font-bold">{totals.status}</span>
+          <span className="font-bold" style={{ color: '#1E3A44' }}>STATUS:</span><span className="text-right font-bold" style={{ color: totals.status === 'FULLY PAID' ? '#2E8B6A' : totals.status === 'NO OUTSTANDING BALANCE' ? '#2C5F6E' : '#C0504D' }}>{totals.status}</span>
         </div>
       </div>
 

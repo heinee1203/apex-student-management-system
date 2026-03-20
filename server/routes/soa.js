@@ -58,8 +58,10 @@ router.get('/:studentId', (req, res) => {
     const remainingBalance = totalObligations - totalPaid;
 
     let status = 'UNPAID';
-    if (totalPaid >= totalObligations && totalObligations > 0) status = 'FULLY PAID';
-    else if (totalPaid > 0) status = 'PARTIAL';
+    if (totalFees === 0 && totalArrears === 0) status = 'NO OUTSTANDING BALANCE';
+    else if (remainingBalance <= 0 && totalObligations > 0) status = 'FULLY PAID';
+    else if (totalPaid > 0 && remainingBalance > 0) status = 'PARTIAL';
+    else if (totalPaid === 0 && totalObligations > 0) status = 'UNPAID';
 
     // School info
     const settings = db.prepare('SELECT key, value FROM school_settings').all();
