@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import StatCard from '../components/StatCard';
-import PayStatusBadge from '../components/PayStatusBadge';
 import { api } from '../utils/api';
 import { formatCurrency, formatDate } from '../utils/format';
 
@@ -11,21 +10,35 @@ export default function Dashboard({ onMenuClick }) {
   const [recentPayments, setRecentPayments] = useState([]);
   const [balanceList, setBalanceList] = useState([]);
   const [feeBreakdown, setFeeBreakdown] = useState([]);
+  const [schoolYears, setSchoolYears] = useState([]);
+  const [selectedSY, setSelectedSY] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // Load school years on mount, then auto-select the latest
   useEffect(() => {
+    api.getDashboardSchoolYears().then(years => {
+      setSchoolYears(years);
+      if (years.length > 0) setSelectedSY(years[0]); // latest year first
+    }).catch(console.error);
+  }, []);
+
+  // Load dashboard data whenever selectedSY changes
+  useEffect(() => {
+    if (!selectedSY && schoolYears.length > 0) return; // wait for auto-select
+    setLoading(true);
+    const sy = selectedSY || undefined;
     Promise.all([
-      api.getDashboardStats(),
-      api.getRecentPayments(),
-      api.getBalanceList(),
-      api.getFeeBreakdown(),
+      api.getDashboardStats(sy),
+      api.getRecentPayments(10, sy),
+      api.getBalanceList(sy),
+      api.getFeeBreakdown(sy),
     ]).then(([s, rp, bl, fb]) => {
       setStats(s);
       setRecentPayments(rp);
       setBalanceList(bl);
       setFeeBreakdown(fb);
     }).catch(console.error).finally(() => setLoading(false));
-  }, []);
+  }, [selectedSY, schoolYears]);
 
   if (loading) return <div className="flex items-center justify-center h-full text-brand-slate">Loading...</div>;
 
@@ -33,6 +46,22 @@ export default function Dashboard({ onMenuClick }) {
     <div>
       <TopBar title="Dashboard" onMenuClick={onMenuClick} />
       <div className="p-6 space-y-6">
+        {/* School Year Filter */}
+        {schoolYears.length > 0 && (
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-medium text-brand-slate">School Year</label>
+            <select
+              value={selectedSY}
+              onChange={e => setSelectedSY(e.target.value)}
+              className="bg-white border border-brand-border rounded-lg px-3 py-1.5 text-sm text-brand-navy focus:outline-none focus:border-brand-steel"
+            >
+              {schoolYears.map(sy => (
+                <option key={sy} value={sy}>{sy}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           <StatCard label="Enrolled Students" value={stats?.totalStudents || 0} color="cyan" />

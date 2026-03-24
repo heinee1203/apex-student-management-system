@@ -86,10 +86,11 @@ export const api = {
   deletePayment: (id) => request(`/payments/${id}`, { method: 'DELETE' }),
 
   // Dashboard
-  getDashboardStats: () => request('/dashboard/stats'),
-  getRecentPayments: (limit = 10) => request(`/dashboard/recent-payments?limit=${limit}`),
-  getBalanceList: () => request('/dashboard/balance-list'),
-  getFeeBreakdown: () => request('/dashboard/fee-breakdown'),
+  getDashboardSchoolYears: () => request('/dashboard/school-years'),
+  getDashboardStats: (sy) => request(`/dashboard/stats${sy ? `?school_year=${sy}` : ''}`),
+  getRecentPayments: (limit = 10, sy) => request(`/dashboard/recent-payments?limit=${limit}${sy ? `&school_year=${sy}` : ''}`),
+  getBalanceList: (sy) => request(`/dashboard/balance-list${sy ? `?school_year=${sy}` : ''}`),
+  getFeeBreakdown: (sy) => request(`/dashboard/fee-breakdown${sy ? `?school_year=${sy}` : ''}`),
 
   // SOA
   getSOA: (studentId, params = {}) => {
