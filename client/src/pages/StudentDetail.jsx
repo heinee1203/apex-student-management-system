@@ -8,6 +8,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import InlineEdit from '../components/InlineEdit';
 import { api } from '../utils/api';
+import { getCurrentSchoolYear } from '../utils/schoolYear';
 import { formatCurrency, formatDate } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 
@@ -30,12 +31,12 @@ export default function StudentDetail({ onMenuClick }) {
   // Fee modal
   const [feeModalOpen, setFeeModalOpen] = useState(false);
   const [editingFee, setEditingFee] = useState(null);
-  const [feeForm, setFeeForm] = useState({ fee_type: 'Tuition Fee', payment_term: '', installment_number: '', school_year: '2024-2025', amount: '', due_date: '', description: '' });
+  const [feeForm, setFeeForm] = useState({ fee_type: 'Tuition Fee', payment_term: '', installment_number: '', school_year: getCurrentSchoolYear(), amount: '', due_date: '', description: '' });
 
   // Payment modal
   const [payModalOpen, setPayModalOpen] = useState(false);
   const [editingPay, setEditingPay] = useState(null);
-  const [payForm, setPayForm] = useState({ amount: '', date: '', method: 'Cash', receipt_no: '', school_year: '2024-2025', notes: '' });
+  const [payForm, setPayForm] = useState({ amount: '', date: '', method: 'Cash', receipt_no: '', school_year: getCurrentSchoolYear(), notes: '' });
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteType, setDeleteType] = useState('');
@@ -338,7 +339,7 @@ export default function StudentDetail({ onMenuClick }) {
             <div className="bg-white border border-brand-border rounded-xl overflow-hidden">
               <div className="px-5 py-3 border-b border-brand-border flex justify-between items-center">
                 <h3 className="text-sm font-semibold text-brand-teal">Assessed Fees</h3>
-                {canEdit && <button onClick={() => { setEditingFee(null); setFeeForm({ fee_type: 'Tuition Fee', payment_term: '', installment_number: '', school_year: '2024-2025', amount: '', due_date: '', description: '' }); setFeeModalOpen(true); }} className="text-xs bg-brand-steel hover:bg-brand-teal text-white px-3 py-1 rounded-lg">+ Add Fee</button>}
+                {canEdit && <button onClick={() => { setEditingFee(null); setFeeForm({ fee_type: 'Tuition Fee', payment_term: '', installment_number: '', school_year: getCurrentSchoolYear(), amount: '', due_date: '', description: '' }); setFeeModalOpen(true); }} className="text-xs bg-brand-steel hover:bg-brand-teal text-white px-3 py-1 rounded-lg">+ Add Fee</button>}
               </div>
               <table className="w-full text-sm">
                 <thead>
@@ -388,7 +389,7 @@ export default function StudentDetail({ onMenuClick }) {
             <div className="bg-white border border-brand-border rounded-xl overflow-hidden">
               <div className="px-5 py-3 border-b border-brand-border flex justify-between items-center">
                 <h3 className="text-sm font-semibold text-brand-teal">Payment History</h3>
-                {canEdit && <button onClick={() => { setEditingPay(null); setPayForm({ amount: '', date: '', method: 'Cash', receipt_no: '', school_year: '2024-2025', notes: '' }); setPayModalOpen(true); }} className="text-xs bg-brand-steel hover:bg-brand-teal text-white px-3 py-1 rounded-lg">+ Add Payment</button>}
+                {canEdit && <button onClick={() => { setEditingPay(null); setPayForm({ amount: '', date: '', method: 'Cash', receipt_no: '', school_year: getCurrentSchoolYear(), notes: '' }); setPayModalOpen(true); }} className="text-xs bg-brand-steel hover:bg-brand-teal text-white px-3 py-1 rounded-lg">+ Add Payment</button>}
               </div>
               <table className="w-full text-sm">
                 <thead>
@@ -411,7 +412,7 @@ export default function StudentDetail({ onMenuClick }) {
                       <td className="px-4 py-2 text-right font-mono text-status-success">{formatCurrency(p.amount)}</td>
                       <td className="px-4 py-2">
                         {canEdit && <div className="flex gap-1">
-                          <button onClick={() => { setEditingPay(p.id); setPayForm({ amount: p.amount, date: p.date, method: p.method, receipt_no: p.receipt_no || '', school_year: p.school_year || '2024-2025', notes: p.notes || '' }); setPayModalOpen(true); }} title="Edit" className="text-brand-slate hover:text-status-warning p-1">
+                          <button onClick={() => { setEditingPay(p.id); setPayForm({ amount: p.amount, date: p.date, method: p.method, receipt_no: p.receipt_no || '', school_year: p.school_year || getCurrentSchoolYear(), notes: p.notes || '' }); setPayModalOpen(true); }} title="Edit" className="text-brand-slate hover:text-status-warning p-1">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                           </button>
                           <button onClick={() => { setDeleteTarget(p.id); setDeleteType('payment'); }} title="Delete" className="text-brand-slate hover:text-status-danger p-1">
@@ -453,8 +454,8 @@ export default function StudentDetail({ onMenuClick }) {
               <input type="text" value={feeForm.installment_number} onChange={e => setFeeForm(p => ({...p, installment_number: e.target.value}))} className="w-full bg-white border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-navy focus:outline-none focus:border-brand-steel" />
             </div>
             <div>
-              <label className="block text-xs text-brand-slate mb-1">School Year *</label>
-              <input type="text" value={feeForm.school_year} onChange={e => setFeeForm(p => ({...p, school_year: e.target.value}))} placeholder="2024-2025" className="w-full bg-white border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-navy focus:outline-none focus:border-brand-steel" />
+              <label className="block text-xs text-brand-slate mb-1">School Year</label>
+              <div className="w-full bg-brand-light border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-navy font-semibold">{feeForm.school_year}</div>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -505,7 +506,7 @@ export default function StudentDetail({ onMenuClick }) {
           </div>
           <div>
             <label className="block text-xs text-brand-slate mb-1">School Year</label>
-            <input type="text" value={payForm.school_year} onChange={e => setPayForm(p => ({...p, school_year: e.target.value}))} placeholder="2024-2025" className="w-full bg-white border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-navy focus:outline-none focus:border-brand-steel" />
+            <div className="w-full bg-brand-light border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-navy font-semibold">{payForm.school_year}</div>
           </div>
           <div>
             <label className="block text-xs text-brand-slate mb-1">Notes</label>
