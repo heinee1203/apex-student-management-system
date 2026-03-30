@@ -8,15 +8,18 @@ export default function SOAPrintPage() {
   const { studentId } = useParams();
   const [searchParams] = useSearchParams();
   const schoolYear = searchParams.get('sy') || getCurrentSchoolYear();
+  const cacheBust = searchParams.get('t') || '';
   const [soaData, setSoaData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    setLoading(true);
+    setSoaData(null);
     api.getSOA(studentId, { school_year: schoolYear })
       .then(data => { setSoaData(data); setLoading(false); })
       .catch(err => { setError(err.message); setLoading(false); });
-  }, [studentId, schoolYear]);
+  }, [studentId, schoolYear, cacheBust]);
 
   if (loading) {
     return <div style={{ padding: '2rem', textAlign: 'center', color: '#8A9EA8' }}>Loading Statement of Account...</div>;

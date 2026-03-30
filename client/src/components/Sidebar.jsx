@@ -69,6 +69,7 @@ export default function Sidebar({ isOpen, onClose, onLogout }) {
             </svg>
             Sign Out
           </button>
+          <p className="text-[10px] text-[#64748B] text-center mt-3 border-t border-white/5 pt-3">LRC Solutions, Inc.</p>
         </div>
       </aside>
     </>

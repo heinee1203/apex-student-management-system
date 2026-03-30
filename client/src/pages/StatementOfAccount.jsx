@@ -28,7 +28,7 @@ export default function StatementOfAccount({ onMenuClick }) {
 
   const generateSOA = () => {
     if (!selectedStudent) { addToast('Please select a student', 'error'); return; }
-    navigate(`/soa/print/${selectedStudent}?sy=${schoolYear}`);
+    navigate(`/soa/print/${selectedStudent}?sy=${schoolYear}&t=${Date.now()}`);
   };
 
   return (

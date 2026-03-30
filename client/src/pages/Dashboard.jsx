@@ -40,7 +40,7 @@ export default function Dashboard({ onMenuClick }) {
     }).catch(console.error).finally(() => setLoading(false));
   }, [selectedSY, schoolYears]);
 
-  if (loading) return <div className="flex items-center justify-center h-full text-brand-slate">Loading...</div>;
+  if (loading) return <div className="flex items-center justify-center h-64 text-brand-slate"><svg className="animate-spin h-6 w-6 mr-2" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>Loading...</div>;
 
   return (
     <div>
@@ -81,7 +81,7 @@ export default function Dashboard({ onMenuClick }) {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-xs text-brand-slate border-b border-brand-border">
+                  <tr className="text-xs text-brand-slate border-b border-brand-border bg-brand-light">
                     <th className="px-4 py-2">Date</th>
                     <th className="px-4 py-2">Student</th>
                     <th className="px-4 py-2">Receipt</th>
@@ -99,6 +99,12 @@ export default function Dashboard({ onMenuClick }) {
                       <td className="px-4 py-2 text-right font-mono text-status-success">{formatCurrency(p.amount)}</td>
                     </tr>
                   ))}
+                  {recentPayments.length === 0 && (
+                    <tr><td colSpan={4} className="px-4 py-6 text-center text-brand-slate">
+                      <svg className="w-8 h-8 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                      No recent payments
+                    </td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -112,7 +118,7 @@ export default function Dashboard({ onMenuClick }) {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-xs text-brand-slate border-b border-brand-border">
+                  <tr className="text-xs text-brand-slate border-b border-brand-border bg-brand-light">
                     <th className="px-4 py-2">Student</th>
                     <th className="px-4 py-2">Grade</th>
                     <th className="px-4 py-2 text-right">Balance</th>

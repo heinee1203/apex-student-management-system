@@ -161,13 +161,20 @@ export default function Students({ onMenuClick }) {
   return (
     <div>
       <TopBar title="Students" onMenuClick={onMenuClick}>
-        <input
-          type="text"
-          placeholder="Search students..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="bg-white border border-brand-border rounded-lg px-3 py-1.5 text-sm text-brand-navy placeholder-brand-slate focus:outline-none focus:border-brand-steel w-44"
-        />
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Search students..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="bg-white border border-brand-border rounded-lg px-3 py-1.5 text-sm text-brand-navy placeholder-brand-slate focus:outline-none focus:border-brand-steel w-44 pr-7"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-brand-slate hover:text-brand-navy">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          )}
+        </div>
         <select value={filterGrade} onChange={e => setFilterGrade(e.target.value)} className="bg-white border border-brand-border rounded-lg px-2 py-1.5 text-sm text-brand-navy focus:outline-none focus:border-brand-steel">
           <option value="">All Grade Levels</option>
           {gradeLevels.map(g => <option key={g} value={g}>{g}</option>)}

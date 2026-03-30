@@ -193,17 +193,20 @@ export default function Payments({ onMenuClick }) {
                     <td className="px-4 py-2 text-brand-slate max-w-[150px] truncate">{p.notes || '—'}</td>
                     <td className="px-4 py-2">
                       {canEdit && <div className="flex gap-1">
-                        <button onClick={() => { setEditing(p.id); setForm({ student_id: p.student_id, amount: p.amount, date: p.date, method: p.method, receipt_no: p.receipt_no || '', school_year: p.school_year || getCurrentSchoolYear(), notes: p.notes || '' }); setModalOpen(true); }} className="text-brand-slate hover:text-status-warning p-1">
+                        <button onClick={() => { setEditing(p.id); setForm({ student_id: p.student_id, amount: p.amount, date: p.date, method: p.method, receipt_no: p.receipt_no || '', school_year: p.school_year || getCurrentSchoolYear(), notes: p.notes || '' }); setModalOpen(true); }} title="Edit" className="text-brand-slate hover:text-status-warning p-1">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                         </button>
-                        <button onClick={() => setDeleteTarget(p.id)} className="text-brand-slate hover:text-status-danger p-1">
+                        <button onClick={() => setDeleteTarget(p.id)} title="Delete" className="text-brand-slate hover:text-status-danger p-1">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
                       </div>}
                     </td>
                   </tr>
                 ))}
-                {filtered.length === 0 && !loading && <tr><td colSpan={8} className="px-4 py-8 text-center text-brand-slate">{hasFilters ? 'No payments match the selected filters' : 'No payments found'}</td></tr>}
+                {filtered.length === 0 && !loading && <tr><td colSpan={8} className="px-4 py-8 text-center text-brand-slate">
+                  <svg className="w-8 h-8 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                  {hasFilters ? 'No payments match the selected filters' : 'No payments found'}
+                </td></tr>}
               </tbody>
             </table>
           </div>
