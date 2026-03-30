@@ -15,6 +15,7 @@ const gradeLevels = ['Nursery 1', 'Nursery 2', 'Kinder', 'Grade 1', 'Grade 2', '
 const paymentTerms = ['Monthly', 'Quarterly', 'Annually'];
 const payStatuses = ['Paid', 'Partial', 'Unpaid', 'Overdue'];
 const statuses = ['Registered', 'Enrolled', 'Not Enrolled', 'Dropped', 'LOA', 'Graduated'];
+const editStatuses = ['Registered', 'Enrolled', 'Not Enrolled', 'LOA', 'Graduated'];
 const scholarships = ['None', 'Full Scholarship', 'Half Scholarship', 'Academic Scholar', 'Athletic Scholar', 'Government (TES)', 'CHED Scholarship', 'LGU Scholarship'];
 
 const emptyForm = { student_id: '', first_name: '', middle_name: '', last_name: '', grade_level: 'Nursery 1', section: '', lrn: '', birth_date: '', gender: '', status: 'Registered', email: '', phone: '', parent_name: '', guardian: '', guardian_phone: '', scholarship: 'None', date_enrolled: '', address: '', payment_term: 'Monthly', total_tuition: '', school_year: getCurrentSchoolYear() };
@@ -336,7 +337,7 @@ export default function Students({ onMenuClick }) {
             <div>
               <label className="block text-xs text-brand-slate mb-1">Status</label>
               <select value={form.status} onChange={e => setField('status', e.target.value)} className="w-full bg-white border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-navy focus:outline-none focus:border-brand-steel">
-                {statuses.map(s => <option key={s} value={s}>{s}</option>)}
+                {editStatuses.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div>

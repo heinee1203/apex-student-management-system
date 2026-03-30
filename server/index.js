@@ -43,6 +43,21 @@ try {
   db.prepare('UPDATE tuition_schedule SET monthly_rate = ROUND(annual_rate / 10.0, 2), quarterly_rate = ROUND(annual_rate / 4.0, 2)').run();
 }
 
+// Migrate students: add dropped_date column if missing
+try {
+  db.prepare('SELECT dropped_date FROM students LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE students ADD COLUMN dropped_date TEXT');
+}
+
+// Warn about existing dropped students without dropped_date
+{
+  const droppedNoDate = db.prepare("SELECT COUNT(*) as count FROM students WHERE status = 'Dropped' AND dropped_date IS NULL").get().count;
+  if (droppedNoDate > 0) {
+    console.log(`WARNING: ${droppedNoDate} students have 'Dropped' status but no dropped_date. Their fees have not been adjusted. Set dropped_date manually or re-drop them via the app.`);
+  }
+}
+
 // One-time fix: correct school year from 2024-2025 to 2025-2026
 {
   const wrongSY = db.prepare("SELECT COUNT(*) as count FROM obligations WHERE school_year = '2024-2025'").get();

@@ -166,6 +166,112 @@ router.post('/:studentId/enroll', requireRole('Admin', 'Registrar', 'Treasurer')
   }
 });
 
+// POST /api/students/:studentId/drop-preview — Preview what will be cancelled
+router.post('/:studentId/drop-preview', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
+  try {
+    const { dropped_date } = req.body;
+    if (!dropped_date) return res.status(400).json({ error: 'dropped_date is required' });
+
+    const student = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+    if (student.status !== 'Enrolled' && student.status !== 'LOA') {
+      return res.status(400).json({ error: `Cannot drop student with status "${student.status}"` });
+    }
+
+    const sy = student.school_year;
+    const dropDate = new Date(dropped_date);
+    const lastDayOfDropMonth = new Date(dropDate.getFullYear(), dropDate.getMonth() + 1, 0).toISOString().slice(0, 10);
+
+    const cancelledTuition = db.prepare(`
+      SELECT COUNT(*) as count FROM obligations
+      WHERE student_id = ? AND school_year = ? AND fee_type = 'Tuition Fee' AND due_date > ?
+    `).get(req.params.studentId, sy, lastDayOfDropMonth).count;
+
+    const cancelledOtherFees = db.prepare(`
+      SELECT COUNT(*) as count FROM obligations
+      WHERE student_id = ? AND school_year = ? AND fee_type != 'Tuition Fee' AND due_date >= ?
+    `).get(req.params.studentId, sy, dropped_date).count;
+
+    res.json({ cancelledTuition, cancelledOtherFees });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/students/:studentId/drop — Drop a student with fee cancellation
+router.post('/:studentId/drop', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
+  try {
+    const { dropped_date } = req.body;
+    if (!dropped_date) return res.status(400).json({ error: 'dropped_date is required' });
+
+    const student = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+    if (student.status !== 'Enrolled' && student.status !== 'LOA') {
+      return res.status(400).json({ error: `Cannot drop student with status "${student.status}"` });
+    }
+
+    const sy = student.school_year;
+    const dropDate = new Date(dropped_date);
+    const lastDayOfDropMonth = new Date(dropDate.getFullYear(), dropDate.getMonth() + 1, 0).toISOString().slice(0, 10);
+
+    const result = db.transaction(() => {
+      // 1. Delete future tuition installments (after drop month)
+      const tuitionResult = db.prepare(`
+        DELETE FROM obligations
+        WHERE student_id = ? AND school_year = ? AND fee_type = 'Tuition Fee' AND due_date > ?
+      `).run(req.params.studentId, sy, lastDayOfDropMonth);
+
+      // 2. Delete non-tuition fees with due_date on or after dropped_date
+      const otherResult = db.prepare(`
+        DELETE FROM obligations
+        WHERE student_id = ? AND school_year = ? AND fee_type != 'Tuition Fee' AND due_date >= ?
+      `).run(req.params.studentId, sy, dropped_date);
+
+      // 3. Update student status
+      db.prepare(`UPDATE students SET status = 'Dropped', dropped_date = ? WHERE student_id = ?`)
+        .run(dropped_date, req.params.studentId);
+
+      // 4. Calculate remaining fees
+      const remainingFees = db.prepare(`
+        SELECT COALESCE(SUM(amount), 0) as total FROM obligations WHERE student_id = ? AND school_year = ?
+      `).get(req.params.studentId, sy).total;
+
+      return {
+        cancelledTuition: tuitionResult.changes,
+        cancelledOtherFees: otherResult.changes,
+        remainingFees,
+      };
+    })();
+
+    const total = result.cancelledTuition + result.cancelledOtherFees;
+    res.json({
+      ...result,
+      message: `Student dropped. ${total} fee${total !== 1 ? 's' : ''} cancelled.`,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/students/:studentId/re-enroll — Re-enroll a dropped student
+router.post('/:studentId/re-enroll', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
+  try {
+    const student = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+    if (student.status !== 'Dropped') {
+      return res.status(400).json({ error: `Cannot re-enroll student with status "${student.status}"` });
+    }
+
+    db.prepare(`UPDATE students SET status = 'Enrolled', dropped_date = NULL WHERE student_id = ?`)
+      .run(req.params.studentId);
+
+    const updated = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/students/:studentId/photo — Upload student photo
 router.post('/:studentId/photo', requireRole('Admin', 'Registrar', 'Treasurer'), upload.single('photo'), (req, res) => {
   try {

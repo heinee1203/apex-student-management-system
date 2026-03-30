@@ -41,6 +41,11 @@ export default function StudentDetail({ onMenuClick }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteType, setDeleteType] = useState('');
   const [enrolling, setEnrolling] = useState(false);
+  const [dropModalOpen, setDropModalOpen] = useState(false);
+  const [dropDate, setDropDate] = useState(new Date().toISOString().slice(0, 10));
+  const [dropPreview, setDropPreview] = useState(null);
+  const [dropping, setDropping] = useState(false);
+  const [reEnrolling, setReEnrolling] = useState(false);
   const [editingTuition, setEditingTuition] = useState(false);
   const [tuitionValue, setTuitionValue] = useState('');
   const photoInputRef = useRef(null);
@@ -134,6 +139,51 @@ export default function StudentDetail({ onMenuClick }) {
     }
   };
 
+  const openDropModal = async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    setDropDate(today);
+    setDropModalOpen(true);
+    try {
+      const preview = await api.dropStudentPreview(studentId, { dropped_date: today });
+      setDropPreview(preview);
+    } catch { setDropPreview(null); }
+  };
+
+  const handleDropDateChange = async (date) => {
+    setDropDate(date);
+    try {
+      const preview = await api.dropStudentPreview(studentId, { dropped_date: date });
+      setDropPreview(preview);
+    } catch { setDropPreview(null); }
+  };
+
+  const handleDrop = async () => {
+    try {
+      setDropping(true);
+      const result = await api.dropStudent(studentId, { dropped_date: dropDate });
+      addToast(result.message);
+      setDropModalOpen(false);
+      load();
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setDropping(false);
+    }
+  };
+
+  const handleReEnroll = async () => {
+    try {
+      setReEnrolling(true);
+      await api.reEnrollStudent(studentId);
+      addToast('Student re-enrolled');
+      load();
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setReEnrolling(false);
+    }
+  };
+
   const handleTuitionSave = async () => {
     const newAmount = parseFloat(tuitionValue);
     if (isNaN(newAmount) || newAmount < 0) { addToast('Invalid amount', 'error'); return; }
@@ -204,7 +254,23 @@ export default function StudentDetail({ onMenuClick }) {
                   {enrolling ? 'Enrolling...' : `Enroll for S.Y. ${student.school_year || ''}`}
                 </button>
               )}
+              {canEdit && (student.status === 'Enrolled' || student.status === 'LOA') && (
+                <button onClick={openDropModal} className="bg-status-danger hover:bg-status-danger/90 text-white px-3 py-1 rounded-lg text-xs font-medium">
+                  Drop Student
+                </button>
+              )}
+              {canEdit && student.status === 'Dropped' && (
+                <button onClick={handleReEnroll} disabled={reEnrolling} className="bg-brand-steel hover:bg-brand-teal text-white px-3 py-1 rounded-lg text-xs font-medium disabled:opacity-50">
+                  {reEnrolling ? 'Re-enrolling...' : 'Re-enroll'}
+                </button>
+              )}
             </div>
+            {student.status === 'Dropped' && (
+              <div className="mt-1 flex items-center gap-2 text-xs text-status-warning bg-status-warning/10 border border-status-warning/20 rounded-lg px-3 py-1.5">
+                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+                This student was dropped{student.dropped_date ? ` on ${formatDate(student.dropped_date)}` : ''}
+              </div>
+            )}
             <div className="flex items-center gap-3 text-sm text-brand-slate">
               <span className="font-mono">{student.student_id}</span>
               <span>{student.grade_level} — {student.section || 'No Section'}</span>
@@ -520,6 +586,33 @@ export default function StudentDetail({ onMenuClick }) {
       </Modal>
 
       <ConfirmDialog isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete} />
+
+      {/* Drop Student Modal */}
+      <Modal isOpen={dropModalOpen} onClose={() => setDropModalOpen(false)} title="Drop Student">
+        <div className="space-y-4">
+          <p className="text-sm text-brand-navy">
+            Drop <strong>{student?.first_name} {student?.last_name}</strong> and cancel future fees.
+          </p>
+          <div>
+            <label className="block text-xs text-brand-slate mb-1">Date Dropped *</label>
+            <input type="date" value={dropDate} onChange={e => handleDropDateChange(e.target.value)} className="w-full bg-white border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-navy focus:outline-none focus:border-brand-steel" />
+          </div>
+          {dropPreview && (
+            <div className="bg-brand-light rounded-lg p-4 text-sm space-y-1">
+              <p className="font-medium text-brand-navy">This will:</p>
+              <p className="text-brand-slate">Cancel <span className="font-semibold text-status-danger">{dropPreview.cancelledTuition}</span> future tuition installment{dropPreview.cancelledTuition !== 1 ? 's' : ''}</p>
+              <p className="text-brand-slate">Cancel <span className="font-semibold text-status-danger">{dropPreview.cancelledOtherFees}</span> unpaid non-tuition fee{dropPreview.cancelledOtherFees !== 1 ? 's' : ''}</p>
+              <p className="text-xs text-brand-slate mt-2">All recorded payments will be kept.</p>
+            </div>
+          )}
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => setDropModalOpen(false)} className="px-4 py-2 text-sm text-brand-navy bg-brand-light hover:bg-brand-border rounded-lg">Cancel</button>
+            <button onClick={handleDrop} disabled={dropping} className="px-4 py-2 text-sm text-white bg-status-danger hover:bg-status-danger/90 rounded-lg disabled:opacity-50">
+              {dropping ? 'Dropping...' : 'Drop Student'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
