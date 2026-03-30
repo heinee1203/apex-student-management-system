@@ -54,6 +54,18 @@ try {
   }
 }
 
+// One-time fix: correct 4 misrecorded payments
+{
+  const fixedPayments = db.prepare(`
+    UPDATE payments SET school_year = '2025-2026'
+    WHERE receipt_no IN ('RCT-20260325-001', 'RCT-20260325-002', 'RCT-20260324-001', 'RCT-20260324-002')
+    AND school_year = '2024-2025'
+  `).run();
+  if (fixedPayments.changes > 0) {
+    console.log(`Fixed ${fixedPayments.changes} payment records: school_year 2024-2025 → 2025-2026`);
+  }
+}
+
 // Ensure fee_types are seeded for existing databases and add missing types
 {
   const desiredFeeTypes = [
