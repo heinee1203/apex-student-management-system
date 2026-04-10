@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import Modal from '../components/Modal';
@@ -8,7 +8,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { api } from '../utils/api';
 import { formatCurrency } from '../utils/format';
-import { getCurrentSchoolYear } from '../utils/schoolYear';
+import { getCurrentSchoolYear, getAvailableSchoolYears } from '../utils/schoolYear';
 import { useAuth } from '../context/AuthContext';
 
 const gradeLevels = ['Nursery 1', 'Nursery 2', 'Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
@@ -25,6 +25,9 @@ export default function Students({ onMenuClick }) {
   const [filterGrade, setFilterGrade] = useState('');
   const [filterTerm, setFilterTerm] = useState('');
   const [filterPayStatus, setFilterPayStatus] = useState('');
+  const [schoolYear, setSchoolYear] = useState(getCurrentSchoolYear());
+  const [allYears, setAllYears] = useState([]);
+  const schoolYears = useMemo(() => getAvailableSchoolYears(allYears), [allYears]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -42,10 +45,18 @@ export default function Students({ onMenuClick }) {
 
   const load = () => {
     setLoading(true);
-    api.getStudents(search ? { search } : {}).then(setStudents).catch(console.error).finally(() => setLoading(false));
+    const params = { school_year: schoolYear };
+    if (search) params.search = search;
+    api.getStudents(params).then(setStudents).catch(console.error).finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, [search]);
+  useEffect(() => { load(); }, [search, schoolYear]);
+
+  // Populate the school-year dropdown from the same union endpoint used by
+  // Dashboard/Fees/Payments so the available years are always consistent.
+  useEffect(() => {
+    api.getDashboardSchoolYears().then(setAllYears).catch(() => {});
+  }, []);
 
   // Auto-fill total_tuition from tuition schedule based on payment term
   useEffect(() => {
@@ -175,6 +186,9 @@ export default function Students({ onMenuClick }) {
             </button>
           )}
         </div>
+        <select value={schoolYear} onChange={e => setSchoolYear(e.target.value)} className="bg-white border border-brand-border rounded-lg px-2 py-1.5 text-sm text-brand-navy focus:outline-none focus:border-brand-steel" title="School Year">
+          {schoolYears.map(sy => <option key={sy} value={sy}>{sy}</option>)}
+        </select>
         <select value={filterGrade} onChange={e => setFilterGrade(e.target.value)} className="bg-white border border-brand-border rounded-lg px-2 py-1.5 text-sm text-brand-navy focus:outline-none focus:border-brand-steel">
           <option value="">All Grade Levels</option>
           {gradeLevels.map(g => <option key={g} value={g}>{g}</option>)}

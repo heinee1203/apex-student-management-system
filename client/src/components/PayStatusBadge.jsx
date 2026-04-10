@@ -1,4 +1,9 @@
 export default function PayStatusBadge({ status }) {
+  // When no fees have been assessed for the selected school year, the backend
+  // returns null → render nothing so the cell reads as "—" via the table's
+  // default empty state rather than misleadingly showing "Unpaid".
+  if (!status) return null;
+
   const styles = {
     Paid: 'bg-[#2E8B6A]/15 text-[#2E8B6A] border-[#2E8B6A]/30',
     Partial: 'bg-[#D4913B]/15 text-[#D4913B] border-[#D4913B]/30',

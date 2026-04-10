@@ -5,7 +5,12 @@ const fs = require('fs');
 const db = require('../db');
 const { generateTuitionObligations } = require('../utils/generateTuition');
 const { enrollStudent } = require('../utils/enrollStudent');
-const { getStudentBalance, getPayStatus } = require('../utils/studentBalance');
+const {
+  getStudentBalance,
+  getYearFlooredBalance,
+  getStudentYearView,
+  getPayStatus,
+} = require('../utils/studentBalance');
 const { requireRole } = require('../middleware/role');
 
 // Multer setup for photo uploads
@@ -32,39 +37,72 @@ const upload = multer({
 });
 
 // GET /api/students
+// When ?school_year=X is provided, each row is shaped for THAT year:
+//   - total_fees / total_paid = current-year amounts
+//   - balance = currentBalance + priorArrears (per-year-floored)
+//   - status overridden to 'Not Enrolled' if no record for this year
+//   - pay_status may be null (blank badge) when nothing assessed
+//   - rows with no current-year record AND no prior arrears are HIDDEN
+// Without school_year: global (all-years) view using per-year-floored balance.
 router.get('/', (req, res) => {
   try {
-    const { search, status, grade_level } = req.query;
-    let sql = `SELECT s.*,
-      COALESCE((SELECT SUM(amount) FROM obligations WHERE student_id = s.student_id), 0) as total_fees,
-      COALESCE((SELECT SUM(amount) FROM payments WHERE student_id = s.student_id), 0) as total_paid
-      FROM students s WHERE 1=1`;
+    const { search, status, grade_level, school_year } = req.query;
+    let sql = `SELECT * FROM students WHERE 1=1`;
     const params = [];
 
     if (search) {
-      sql += ` AND (s.student_id LIKE ? OR s.first_name LIKE ? OR s.last_name LIKE ? OR s.section LIKE ?)`;
+      sql += ` AND (student_id LIKE ? OR first_name LIKE ? OR last_name LIKE ? OR section LIKE ?)`;
       const term = `%${search}%`;
       params.push(term, term, term, term);
     }
-    if (status) {
-      sql += ` AND s.status = ?`;
+    // NOTE: status filter only applied when NOT in year-context mode, because
+    // the year-context status is derived per-row below.
+    if (status && !school_year) {
+      sql += ` AND status = ?`;
       params.push(status);
     }
     if (grade_level) {
-      sql += ` AND s.grade_level = ?`;
+      sql += ` AND grade_level = ?`;
       params.push(grade_level);
     }
-
-    sql += ` ORDER BY s.last_name, s.first_name`;
+    sql += ` ORDER BY last_name, first_name`;
     const students = db.prepare(sql).all(...params);
 
-    const result = students.map(s => {
-      // Use shared helper so list, profile, and dashboard all agree
-      const { totalFees, totalPaid, balance } = getStudentBalance(db, s.student_id);
-      const payStatus = getPayStatus(db, s.student_id, totalFees, totalPaid, balance);
-      return { ...s, total_fees: totalFees, total_paid: totalPaid, balance, pay_status: payStatus };
-    });
+    if (school_year) {
+      const result = [];
+      for (const s of students) {
+        const view = getStudentYearView(db, s.student_id, s, school_year);
+        // Hide students with no year record and no arrears
+        if (!view.hasCurrentYearRecord && view.priorArrears === 0) continue;
+        // Apply status filter against the DERIVED status
+        if (status && view.status !== status) continue;
+        result.push({
+          ...s,
+          status: view.status,
+          total_fees: view.currentFees,
+          total_paid: view.currentPaid,
+          current_balance: view.currentBalance,
+          prior_arrears: view.priorArrears,
+          balance: view.balance,
+          pay_status: view.payStatus,
+          has_current_year_record: view.hasCurrentYearRecord,
+        });
+      }
+      return res.json(result);
+    }
 
+    // Global (all-years) view — per-year-floored balance
+    const result = students.map(s => {
+      const { totalFees, totalPaid, balance } = getYearFlooredBalance(db, s.student_id);
+      const payStatus = getPayStatus(db, s.student_id, totalFees, totalPaid, balance);
+      return {
+        ...s,
+        total_fees: totalFees,
+        total_paid: totalPaid,
+        balance,
+        pay_status: payStatus,
+      };
+    });
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -72,14 +110,30 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/students/:studentId
+// When ?school_year=X is provided, returns the per-SY view.
 router.get('/:studentId', (req, res) => {
   try {
     const student = db.prepare(`SELECT * FROM students WHERE student_id = ?`).get(req.params.studentId);
     if (!student) return res.status(404).json({ error: 'Student not found' });
 
-    const { totalFees, totalPaid, balance } = getStudentBalance(db, req.params.studentId);
-    const payStatus = getPayStatus(db, req.params.studentId, totalFees, totalPaid, balance);
+    const { school_year } = req.query;
+    if (school_year) {
+      const view = getStudentYearView(db, req.params.studentId, student, school_year);
+      return res.json({
+        ...student,
+        status: view.status,
+        total_fees: view.currentFees,
+        total_paid: view.currentPaid,
+        current_balance: view.currentBalance,
+        prior_arrears: view.priorArrears,
+        balance: view.balance,
+        pay_status: view.payStatus,
+        has_current_year_record: view.hasCurrentYearRecord,
+      });
+    }
 
+    const { totalFees, totalPaid, balance } = getYearFlooredBalance(db, req.params.studentId);
+    const payStatus = getPayStatus(db, req.params.studentId, totalFees, totalPaid, balance);
     res.json({ ...student, total_fees: totalFees, total_paid: totalPaid, balance, pay_status: payStatus });
   } catch (err) {
     res.status(500).json({ error: err.message });

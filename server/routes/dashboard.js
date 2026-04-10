@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { getStudentBalance, getStudentsWithBalance } = require('../utils/studentBalance');
+const { getYearFlooredBalance, getStudentsWithBalance } = require('../utils/studentBalance');
 
 // GET /api/dashboard/school-years — school years available in dropdowns.
 // Returns the union of: years that have data (obligations/payments/students)
@@ -69,16 +69,18 @@ router.get('/stats', (req, res) => {
       ? db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE school_year = ?`).get(sy).total
       : db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM payments`).get().total;
 
-    // Outstanding and Fully Paid — computed ACROSS ALL YEARS per student, no sy filter.
-    // This matches how the Student Profile calculates balance (see students.js GET /:studentId)
-    // so Dashboard numbers and Profile numbers always agree.
+    // Outstanding and Fully Paid — computed per-year-floored across all years,
+    // matching the spec: Σ max(0, fees_y - paid_y). Overpayments in one year
+    // never offset underpayments in another year.
+    // The per-year-floored balance can never be negative, so "fully paid" is
+    // balance === 0 (with f > 0 to exclude students with no fees at all).
     const allStudents = db.prepare(`SELECT student_id FROM students`).all();
     let outstanding = 0;
     let fullyPaid = 0;
     for (const { student_id } of allStudents) {
-      const { totalFees: f, balance } = getStudentBalance(db, student_id); // no year — all years
+      const { totalFees: f, balance } = getYearFlooredBalance(db, student_id);
       if (balance > 0) outstanding += balance;
-      if (balance <= 0 && f > 0) fullyPaid++;
+      if (balance === 0 && f > 0) fullyPaid++;
     }
 
     const collectionRate = totalFees > 0 ? ((totalCollected / totalFees) * 100) : 0;

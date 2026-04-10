@@ -7,80 +7,93 @@ function buildSOA(studentId, schoolYear) {
   const student = db.prepare('SELECT * FROM students WHERE student_id = ?').get(studentId);
   if (!student) return null;
 
-  // Obligations: filter to the requested school year (these are fees assessed
-  // for THIS year). Arrears from prior years are shown in their own section.
-  let obligationSql = `SELECT * FROM obligations WHERE student_id = ?`;
-  const oParams = [studentId];
-  if (schoolYear) {
-    obligationSql += ` AND school_year = ?`;
-    oParams.push(schoolYear);
-  }
-  obligationSql += ` ORDER BY due_date ASC`;
-  const obligations = db.prepare(obligationSql).all(...oParams);
+  // === Current school year figures ===
+  // Obligations for THIS year are what the student was billed for during sy.
+  // Payments for THIS year are what's applied toward those bills.
+  const obligations = db.prepare(
+    `SELECT * FROM obligations WHERE student_id = ?${schoolYear ? ' AND school_year = ?' : ''} ORDER BY due_date ASC`
+  ).all(...(schoolYear ? [studentId, schoolYear] : [studentId]));
 
-  // Payments: show ALL payments for the student regardless of school_year label.
-  // A payment is money received from the parent — it reduces the student's total
-  // balance no matter what year it was tagged under. This matches how the Student
-  // Profile calculates balance and fixes the recurring bug where payments and
-  // obligations labeled with different school_years created phantom balances.
-  const payments = db.prepare(
+  const currentYearPayments = db.prepare(
+    `SELECT * FROM payments WHERE student_id = ?${schoolYear ? ' AND school_year = ?' : ''} ORDER BY date ASC`
+  ).all(...(schoolYear ? [studentId, schoolYear] : [studentId]));
+
+  // Full payment history (all years) — kept for transparency in the printout.
+  const allPayments = db.prepare(
     `SELECT * FROM payments WHERE student_id = ? ORDER BY date ASC`
   ).all(studentId);
 
-  const totalFees = obligations.reduce((sum, o) => sum + o.amount, 0);
-  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+  const currentFees = obligations.reduce((sum, o) => sum + o.amount, 0);
+  const currentPaid = currentYearPayments.reduce((sum, p) => sum + p.amount, 0);
 
-  // Arrears = prior-year FEES ONLY. Do NOT subtract payments per-year here —
-  // the Payment History table shows ALL payments, and the summary subtracts
-  // ALL payments from (currentFees + priorYearFees) exactly once. Subtracting
-  // payments per-year in this section + again in the summary would double-count
-  // payments that happened to fall in a prior school year.
-  //
-  // We still skip the section entirely when the student is globally paid up,
-  // so fully-settled students don't see a phantom "Previous Arrears" header.
-  const allYearsFees = db.prepare(
-    'SELECT COALESCE(SUM(amount), 0) as total FROM obligations WHERE student_id = ?'
-  ).get(studentId).total;
-  const globallyPaidUp = totalPaid >= allYearsFees - 1;
-
+  // === Prior-year arrears, per-year floored (spec rule) ===
+  // For each prior school year, arrears_y = max(0, fees_y - paid_y). A year
+  // that was overpaid contributes 0 — the school absorbs the credit instead
+  // of carrying it forward. A year that was underpaid surfaces in its own
+  // row so the parent sees exactly which year is outstanding.
   let arrears = [];
   let totalArrears = 0;
-  if (schoolYear && !globallyPaidUp) {
+  if (schoolYear) {
     const prevYears = db.prepare(`
-      SELECT DISTINCT school_year FROM obligations
-      WHERE student_id = ? AND school_year < ?
-      ORDER BY school_year ASC
-    `).all(studentId, schoolYear);
+      SELECT DISTINCT sy FROM (
+        SELECT school_year as sy FROM obligations
+          WHERE student_id = ? AND school_year IS NOT NULL AND school_year < ?
+        UNION
+        SELECT school_year as sy FROM payments
+          WHERE student_id = ? AND school_year IS NOT NULL AND school_year < ?
+      )
+      ORDER BY sy ASC
+    `).all(studentId, schoolYear, studentId, schoolYear);
 
-    for (const py of prevYears) {
+    for (const { sy } of prevYears) {
       const pyFees = db.prepare(
         `SELECT COALESCE(SUM(amount), 0) as total FROM obligations WHERE student_id = ? AND school_year = ?`
-      ).get(studentId, py.school_year).total;
-      if (pyFees > 0) {
-        arrears.push({ school_year: py.school_year, total_fees: pyFees });
-        totalArrears += pyFees;
+      ).get(studentId, sy).total;
+      const pyPaid = db.prepare(
+        `SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE student_id = ? AND school_year = ?`
+      ).get(studentId, sy).total;
+      const raw = pyFees - pyPaid;
+      const owed = Math.abs(raw) < 1 ? 0 : Math.max(0, raw);
+      if (owed > 0) {
+        arrears.push({
+          school_year: sy,
+          total_fees: pyFees,
+          total_paid: pyPaid,
+          balance: owed,
+        });
+        totalArrears += owed;
       }
     }
   }
 
-  // totalObligations = current-year fees + raw prior-year fees
-  // remainingBalance  = totalObligations - ALL payments (applied ONCE, here)
-  const totalObligations = totalFees + totalArrears;
-  const rawRemaining = totalObligations - totalPaid;
-  // Apply rounding fix: balances between -1 and 1 are treated as 0
-  const remainingBalance = Math.abs(rawRemaining) < 1 ? 0 : rawRemaining;
+  // === Summary ===
+  // totalObligations = this year's fees + net prior-year arrears
+  // remainingBalance = totalObligations − this year's payments
+  // (Prior-year payments are already netted inside the arrears lines.)
+  const totalObligations = currentFees + totalArrears;
+  const rawRemaining = totalObligations - currentPaid;
+  let remainingBalance = Math.abs(rawRemaining) < 1 ? 0 : rawRemaining;
+  // Floor at zero — overpaid current year never shows as a negative balance.
+  if (remainingBalance < 0) remainingBalance = 0;
 
   // Status must match the remaining balance shown on the SOA.
   let status;
-  if (totalFees === 0 && totalArrears === 0) {
+  if (currentFees === 0 && totalArrears === 0) {
     status = 'NO OUTSTANDING BALANCE';
-  } else if (remainingBalance <= 0) {
+  } else if (remainingBalance === 0) {
     status = 'FULLY PAID';
-  } else if (totalPaid > 0) {
+  } else if (currentPaid > 0) {
     status = 'PARTIAL';
   } else {
     status = 'UNPAID';
   }
+
+  // Keep `payments` field populated with current-year payments so the printout
+  // "PAYMENTS APPLIED THIS YEAR" table ties out to the summary. `allPayments`
+  // is returned separately for views that want full transparency.
+  const totalFees = currentFees;
+  const totalPaid = currentPaid;
+  const payments = currentYearPayments;
 
   const settings = db.prepare('SELECT key, value FROM school_settings').all();
   const schoolInfo = {};
@@ -89,15 +102,17 @@ function buildSOA(studentId, schoolYear) {
   return {
     student,
     obligations,
-    payments,
+    payments,          // current-year only — ties out to summary math
+    allPayments,       // full history for transparency
     arrears,
     totals: {
-      totalFees,
-      totalPaid,
+      totalFees,       // alias for currentFees
+      totalPaid,       // alias for currentPaid (this year only)
       balance: remainingBalance,
       status,
       arrears: totalArrears,
-      currentFees: totalFees,
+      currentFees,
+      currentPaid,
       totalObligations,
       remainingBalance,
     },

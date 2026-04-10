@@ -151,7 +151,7 @@ export default function SOADocument({ data }) {
               {arrears.map((a, i) => (
                 <tr key={i} style={{ backgroundColor: i % 2 === 0 ? 'white' : '#FBFAF9' }}>
                   <td style={td}>{a.school_year}</td>
-                  <td style={{ ...tdR, fontWeight: 'bold', color: '#C0504D' }}>{formatCurrency(a.total_fees)}</td>
+                  <td style={{ ...tdR, fontWeight: 'bold', color: '#C0504D' }}>{formatCurrency(a.balance != null ? a.balance : a.total_fees)}</td>
                 </tr>
               ))}
               <tr style={{ backgroundColor: '#E8EDF0', fontWeight: 'bold' }}>
@@ -196,10 +196,10 @@ export default function SOADocument({ data }) {
         </table>
       </div>
 
-      {/* Payment History */}
+      {/* Payment History (current year) — prior-year payments are netted into the Arrears section above */}
       <div className="soa-section" style={{ marginBottom: '8px' }}>
         <h3 className="font-bold uppercase" style={{ color: '#2C5F6E', fontSize: '10pt', letterSpacing: '0.4px', margin: '0 0 4px' }}>
-          Payment History
+          Payments Applied {school_year && school_year !== 'All' ? `(${school_year})` : ''}
         </h3>
         <table className="w-full" style={{ border: '1px solid #D6DDE2', borderCollapse: 'collapse' }}>
           <thead>
