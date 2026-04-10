@@ -2,114 +2,97 @@
 // reports.js, and admin.js. Every balance display in the system goes
 // through these helpers so the numbers always agree.
 //
-// School year rollover rule (spec):
-//   - Per-year accounting: for each SY, balance_y = max(0, fees_y - paid_y)
-//   - Overpayments are absorbed by the school — never carry forward as a
-//     credit into later years.
-//   - Underpayments DO carry forward as "Previous Arrears".
-//   - Global balance = Σ max(0, fees_y - paid_y)   (never negative)
-//   - Per-year balances with |x| < 1 are treated as 0 (installment rounding
-//     tolerance so ₱0.30 residuals don't show as arrears).
+// Balance rule (spec):
+//   balance = max(0, Σ all fees − Σ all payments)
 //
-// A student row for a given SY can be in one of three shapes:
-//   a) hasCurrentYearRecord=true  — student is enrolled / has fees for this
-//      year; balance = currentYearBalance + priorArrears, status from the
-//      students.status column.
-//   b) hasCurrentYearRecord=false, priorArrears>0 — student has leftover
-//      arrears from a past year but is not enrolled this year; status is
-//      overridden to 'Not Enrolled', balance shows the arrears only.
-//   c) hasCurrentYearRecord=false, priorArrears=0 — student has no record
-//      for this year and nothing owed. Callers may hide these.
+// - GLOBAL sum across all school years. Payments labeled to any year
+//   reduce the student's total obligation. This matches what a parent
+//   expects: "I paid ₱76k against ₱76k of fees — I'm paid up", regardless
+//   of which school_year column a payment was tagged with. The earlier
+//   per-year-floored rule produced phantom balances for every student
+//   whose payments happened to be mislabeled across years.
+// - Floored at 0. Overpayments are absorbed by the school and never
+//   carry forward as a credit into later years.
+// - Near-zero (|balance| < 1 peso) is treated as 0 to swallow installment
+//   rounding residuals like ₱0.30.
+//
+// Year-view breakdown (for SOA / per-SY students list):
+//   - currentFees / currentPaid: SUM for the requested school year only
+//   - priorArrears:  sum of max(0, fees_y − paid_y) for all y < schoolYear,
+//                    capped to the global balance so the per-year display
+//                    never exceeds the global truth
+//   - currentBalance: balance − priorArrears  (never negative)
 
 const ROUND_TOLERANCE = 1; // pesos; |x| < 1 → 0
 
-function floorYear(fees, paid) {
-  const raw = fees - paid;
+function normalize(raw) {
   if (Math.abs(raw) < ROUND_TOLERANCE) return 0;
-  return Math.max(0, raw);
+  return raw;
 }
 
-// Global balance across all years, with each year floored at 0.
-// Returns { totalFees, totalPaid, balance, perYear }
-//   totalFees  = raw SUM(obligations) across all years
-//   totalPaid  = raw SUM(payments) across all years
-//   balance    = Σ max(0, fees_y - paid_y)
-//   perYear    = { [sy]: { fees, paid, floored } }  (useful for reuse)
-function getYearFlooredBalance(db, studentId) {
-  const obligRows = db.prepare(
-    `SELECT COALESCE(school_year,'') as sy, COALESCE(SUM(amount),0) as total
-     FROM obligations WHERE student_id = ? GROUP BY school_year`
-  ).all(studentId);
-  const payRows = db.prepare(
-    `SELECT COALESCE(school_year,'') as sy, COALESCE(SUM(amount),0) as total
-     FROM payments WHERE student_id = ? GROUP BY school_year`
-  ).all(studentId);
-
-  const perYear = {};
-  let totalFees = 0;
-  let totalPaid = 0;
-  for (const r of obligRows) {
-    perYear[r.sy] = perYear[r.sy] || { fees: 0, paid: 0, floored: 0 };
-    perYear[r.sy].fees += r.total;
-    totalFees += r.total;
-  }
-  for (const r of payRows) {
-    perYear[r.sy] = perYear[r.sy] || { fees: 0, paid: 0, floored: 0 };
-    perYear[r.sy].paid += r.total;
-    totalPaid += r.total;
-  }
-
-  let balance = 0;
-  for (const sy of Object.keys(perYear)) {
-    perYear[sy].floored = floorYear(perYear[sy].fees, perYear[sy].paid);
-    balance += perYear[sy].floored;
-  }
-
-  // Apply tolerance at the global level too (belt-and-suspenders)
-  if (Math.abs(balance) < ROUND_TOLERANCE) balance = 0;
-
-  return { totalFees, totalPaid, balance, perYear };
-}
-
-// Legacy shim: used to be `getStudentBalance(db, id)` returning global
-// (all years) totals. Now routes through getYearFlooredBalance so the
-// balance respects the per-year floor rule.
+// Global balance — the authoritative number. Sum all obligations, sum
+// all payments, floor at 0, apply tolerance. Used by Dashboard stats,
+// Students list, SOA summary, Reports, End-of-Year (historical).
+//
+// Returns { totalFees, totalPaid, balance }.
 function getStudentBalance(db, studentId) {
-  const { totalFees, totalPaid, balance } = getYearFlooredBalance(db, studentId);
+  const totalFees = db.prepare(
+    `SELECT COALESCE(SUM(amount), 0) as t FROM obligations WHERE student_id = ?`
+  ).get(studentId).t;
+  const totalPaid = db.prepare(
+    `SELECT COALESCE(SUM(amount), 0) as t FROM payments WHERE student_id = ?`
+  ).get(studentId).t;
+  const raw = totalFees - totalPaid;
+  const normalized = normalize(raw);
+  const balance = Math.max(0, normalized); // floor: no negative balances
   return { totalFees, totalPaid, balance };
+}
+
+// Alias kept so existing callers (dashboard.js, students.js) don't break
+// while we consolidate the name. They call it as a drop-in for the old
+// per-year helper.
+function getYearFlooredBalance(db, studentId) {
+  return getStudentBalance(db, studentId);
 }
 
 // Year-context view used by Students list (when ?school_year= is set),
 // Student detail, and SOA. Returns everything the UI needs for one row
 // in one SY context.
 //
+// Key invariants:
+//   - balance is ALWAYS the global truth (max(0, totalFees − totalPaid))
+//   - priorArrears + currentBalance === balance
+//   - priorArrears ≤ balance  (caller can trust the breakdown never
+//     exceeds the authoritative total)
+//
 // studentRow is the row from the `students` table — pass it in to avoid
 // re-SELECTing on hot paths.
 function getStudentYearView(db, studentId, studentRow, schoolYear) {
+  const { totalFees: globalFees, totalPaid: globalPaid, balance } =
+    getStudentBalance(db, studentId);
+
   if (!schoolYear) {
-    // Fall back to global view
-    const { totalFees, totalPaid, balance } = getYearFlooredBalance(db, studentId);
     return {
-      currentFees: totalFees,
-      currentPaid: totalPaid,
+      currentFees: globalFees,
+      currentPaid: globalPaid,
       currentBalance: balance,
       priorArrears: 0,
       balance,
       status: studentRow ? studentRow.status : null,
-      payStatus: derivePayStatusGlobal(db, studentId, totalFees, totalPaid, balance),
+      payStatus: derivePayStatusGlobal(db, studentId, globalFees, globalPaid, balance),
       hasCurrentYearRecord: true,
     };
   }
 
   const currentFees = db.prepare(
-    `SELECT COALESCE(SUM(amount),0) as total FROM obligations WHERE student_id = ? AND school_year = ?`
-  ).get(studentId, schoolYear).total;
+    `SELECT COALESCE(SUM(amount), 0) as t FROM obligations WHERE student_id = ? AND school_year = ?`
+  ).get(studentId, schoolYear).t;
   const currentPaid = db.prepare(
-    `SELECT COALESCE(SUM(amount),0) as total FROM payments WHERE student_id = ? AND school_year = ?`
-  ).get(studentId, schoolYear).total;
-  const currentBalance = floorYear(currentFees, currentPaid);
+    `SELECT COALESCE(SUM(amount), 0) as t FROM payments WHERE student_id = ? AND school_year = ?`
+  ).get(studentId, schoolYear).t;
 
-  // Sum prior-year arrears using per-year flooring
+  // Prior-year arrears: sum per-year floored (informational) then cap
+  // at the global balance so the breakdown is internally consistent.
   const prevYears = db.prepare(`
     SELECT DISTINCT sy FROM (
       SELECT school_year as sy FROM obligations
@@ -120,7 +103,7 @@ function getStudentYearView(db, studentId, studentRow, schoolYear) {
     )
   `).all(studentId, schoolYear, studentId, schoolYear);
 
-  let priorArrears = 0;
+  let rawPriorArrears = 0;
   for (const { sy } of prevYears) {
     const f = db.prepare(
       `SELECT COALESCE(SUM(amount),0) as t FROM obligations WHERE student_id = ? AND school_year = ?`
@@ -128,11 +111,16 @@ function getStudentYearView(db, studentId, studentRow, schoolYear) {
     const p = db.prepare(
       `SELECT COALESCE(SUM(amount),0) as t FROM payments WHERE student_id = ? AND school_year = ?`
     ).get(studentId, sy).t;
-    priorArrears += floorYear(f, p);
+    const pyNet = f - p;
+    rawPriorArrears += Math.max(0, pyNet);
   }
+  // Cap at global balance — can't owe more for prior years than the
+  // student owes in total (handles the case where current year is
+  // overpaid and absorbs some prior year debt).
+  let priorArrears = Math.min(rawPriorArrears, balance);
   if (Math.abs(priorArrears) < ROUND_TOLERANCE) priorArrears = 0;
 
-  const balance = currentBalance + priorArrears;
+  const currentBalance = balance - priorArrears; // always ≥ 0 by construction
 
   const hasCurrentYearRecord =
     currentFees > 0 || (studentRow && studentRow.school_year === schoolYear);
@@ -140,15 +128,13 @@ function getStudentYearView(db, studentId, studentRow, schoolYear) {
   const rawStatus = studentRow ? studentRow.status : null;
   const status = hasCurrentYearRecord ? rawStatus : 'Not Enrolled';
 
-  // Pay status derivation — STRICTLY about current-year fees.
-  // Arrears are already visible in the Balance column; a student with
-  // unpaid arrears but no current-year assessment should render a BLANK
-  // badge, not "Unpaid" (they don't owe current-year fees).
+  // Pay status derivation — STRICTLY about current-year fees. Students
+  // with no current-year assessment render a BLANK badge regardless of
+  // prior arrears (arrears are already visible in the Balance column).
   let payStatus = null;
   if (currentFees === 0) {
-    payStatus = null; // blank — no current-year assessment
+    payStatus = null;
   } else {
-    // Current year has fees assessed
     if (currentBalance === 0) {
       payStatus = 'Paid';
     } else if (currentPaid > 0) {
@@ -178,16 +164,15 @@ function getStudentYearView(db, studentId, studentRow, schoolYear) {
   };
 }
 
-// Derive pay status for GLOBAL (all-years) view. Used by the Students list
-// when no school_year is provided and by Student detail.
+// Derive pay status for the GLOBAL (all-years) view — used by the
+// Students list when no school_year is provided.
 function derivePayStatusGlobal(db, studentId, totalFees, totalPaid, balance) {
+  if (totalFees === 0) return null;
   const today = new Date().toISOString().slice(0, 10);
   const hasOverdue = db.prepare(
     `SELECT COUNT(*) as c FROM obligations
      WHERE student_id = ? AND due_date IS NOT NULL AND due_date < ?`
   ).get(studentId, today).c > 0;
-
-  if (totalFees === 0) return null;
   let payStatus;
   if (balance === 0) payStatus = 'Paid';
   else if (totalPaid > 0) payStatus = 'Partial';
@@ -196,18 +181,14 @@ function derivePayStatusGlobal(db, studentId, totalFees, totalPaid, balance) {
   return payStatus;
 }
 
-// Legacy alias kept for call sites that pass (db, id, totalFees, totalPaid, balance).
+// Legacy alias for call sites that pass pre-computed totals.
 function getPayStatus(db, studentId, totalFees, totalPaid, balance) {
   return derivePayStatusGlobal(db, studentId, totalFees, totalPaid, balance);
 }
 
 // Single source of truth for "students who owe money" used by Dashboard
-// /balance-list, SOA /batch, End of Year preview + snapshot, and any other
-// endpoint that needs to list students with outstanding balances.
-//
-// Uses per-year floor rule — a student with a prior-year overpayment and a
-// current-year arrears will be listed at the current-year amount, not the
-// (smaller) global net.
+// /balance-list, Reports /receivables, /aging, etc. Global-floored rule
+// — matches getStudentBalance, so every "who owes?" view agrees.
 function getStudentsWithBalance(db) {
   const students = db.prepare(`
     SELECT student_id, first_name, last_name, middle_name,
@@ -218,7 +199,7 @@ function getStudentsWithBalance(db) {
 
   const rows = [];
   for (const s of students) {
-    const { totalFees, totalPaid, balance } = getYearFlooredBalance(db, s.student_id);
+    const { totalFees, totalPaid, balance } = getStudentBalance(db, s.student_id);
     if (balance > 0) {
       rows.push({
         ...s,
@@ -234,9 +215,8 @@ function getStudentsWithBalance(db) {
 
 module.exports = {
   getStudentBalance,
-  getYearFlooredBalance,
+  getYearFlooredBalance, // alias, kept for backward compat
   getStudentYearView,
   getPayStatus,
   getStudentsWithBalance,
-  floorYear,
 };
