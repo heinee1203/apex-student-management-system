@@ -134,6 +134,69 @@ catch {
   }
 }
 
+// One-time fix: revert prior-year records wrongly bulk-migrated from 2024-2025 to 2025-2026.
+// The earlier blanket migration moved ALL 2024-2025 records forward, but records whose
+// due_date/date was before 2025-06-01 (start of PH S.Y. 2025-2026) were genuinely from
+// the prior school year. Revert them based on date, and revert any students who end up
+// with NO current-year obligations (meaning they were never actually re-enrolled).
+{
+  // Step 1: Revert obligations whose due_date is before 2025-06-01
+  const obsToRevert = db.prepare(`
+    SELECT COUNT(*) as c FROM obligations
+    WHERE school_year = '2025-2026' AND due_date IS NOT NULL AND due_date < '2025-06-01'
+  `).get().c;
+
+  // Step 2: Revert payments whose date is before 2025-06-01
+  const paysToRevert = db.prepare(`
+    SELECT COUNT(*) as c FROM payments
+    WHERE school_year = '2025-2026' AND date IS NOT NULL AND date < '2025-06-01'
+  `).get().c;
+
+  if (obsToRevert > 0 || paysToRevert > 0) {
+    const tx = db.transaction(() => {
+      db.prepare(`
+        UPDATE obligations SET school_year = '2024-2025'
+        WHERE school_year = '2025-2026' AND due_date IS NOT NULL AND due_date < '2025-06-01'
+      `).run();
+      db.prepare(`
+        UPDATE payments SET school_year = '2024-2025'
+        WHERE school_year = '2025-2026' AND date IS NOT NULL AND date < '2025-06-01'
+      `).run();
+    });
+    tx();
+    console.log(`Reverted ${obsToRevert} obligations and ${paysToRevert} payments with due_date/date < 2025-06-01 back to S.Y. 2024-2025`);
+  }
+
+  // Step 3: Revert student records whose obligations are now all in 2024-2025
+  // (they were never genuinely re-enrolled for the new year)
+  const studentsToRevert = db.prepare(`
+    SELECT s.student_id, s.first_name, s.last_name
+    FROM students s
+    WHERE s.school_year = '2025-2026'
+    AND s.status = 'Enrolled'
+    AND EXISTS (SELECT 1 FROM obligations o WHERE o.student_id = s.student_id)
+    AND NOT EXISTS (
+      SELECT 1 FROM obligations o
+      WHERE o.student_id = s.student_id AND o.school_year = '2025-2026'
+    )
+  `).all();
+
+  if (studentsToRevert.length > 0) {
+    const tx = db.transaction(() => {
+      const stmt = db.prepare(`
+        UPDATE students SET status = 'Not Enrolled', school_year = '2024-2025'
+        WHERE student_id = ?
+      `);
+      for (const s of studentsToRevert) {
+        stmt.run(s.student_id);
+        console.log(`Reverted student to Not Enrolled + S.Y. 2024-2025: ${s.first_name} ${s.last_name} (${s.student_id})`);
+      }
+    });
+    tx();
+    console.log(`Reverted ${studentsToRevert.length} student${studentsToRevert.length !== 1 ? 's' : ''} wrongly marked as S.Y. 2025-2026 Enrolled`);
+  }
+}
+
 // Ensure fee_types are seeded for existing databases and add missing types
 {
   const desiredFeeTypes = [
