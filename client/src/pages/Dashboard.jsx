@@ -152,20 +152,35 @@ export default function Dashboard({ onMenuClick }) {
             <h3 className="text-sm font-semibold text-brand-teal">Fee Breakdown by Type</h3>
           </div>
           <div className="p-5 space-y-3">
-            {feeBreakdown.map(fb => (
-              <div key={fb.fee_type}>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-brand-navy">{fb.fee_type}</span>
-                  <span className="font-mono text-brand-slate">{formatCurrency(fb.total_assessed)}</span>
-                </div>
-                <div className="w-full bg-brand-light rounded-full h-2">
-                  <div
-                    className="bg-brand-steel h-2 rounded-full transition-all"
-                    style={{ width: `${Math.min(fb.rate, 100)}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+            {(() => {
+              const maxAmount = Math.max(...feeBreakdown.map(fb => fb.total_assessed || 0), 0);
+              const totalAll = feeBreakdown.reduce((sum, fb) => sum + (fb.total_assessed || 0), 0);
+              return feeBreakdown.map(fb => {
+                const amount = fb.total_assessed || 0;
+                const widthPct = maxAmount > 0 ? (amount / maxAmount) * 100 : 0;
+                const sharePct = totalAll > 0 ? (amount / totalAll) * 100 : 0;
+                return (
+                  <div key={fb.fee_type}>
+                    <div className="flex justify-between items-baseline text-sm mb-1">
+                      <span className="text-brand-navy">{fb.fee_type}</span>
+                      <span className="flex items-baseline gap-3">
+                        <span className="font-mono text-brand-slate">{formatCurrency(amount)}</span>
+                        <span className="font-mono text-xs text-brand-slate w-12 text-right">{sharePct.toFixed(1)}%</span>
+                      </span>
+                    </div>
+                    <div className="w-full bg-brand-light rounded-full h-2">
+                      <div
+                        className="bg-brand-steel h-2 rounded-full transition-all"
+                        style={{ width: `${widthPct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+            {feeBreakdown.length === 0 && (
+              <p className="text-center text-brand-slate text-sm py-4">No fees assessed</p>
+            )}
           </div>
         </div>
       </div>
