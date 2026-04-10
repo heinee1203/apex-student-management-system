@@ -114,6 +114,30 @@ function initializeDatabase() {
       last_login    TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS year_end_snapshots (
+      id             TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+      student_id     TEXT NOT NULL,
+      school_year    TEXT NOT NULL,
+      total_fees     REAL NOT NULL DEFAULT 0,
+      total_paid     REAL NOT NULL DEFAULT 0,
+      arrears_amount REAL NOT NULL DEFAULT 0,
+      snapshot_date  TEXT NOT NULL,
+      created_by     TEXT,
+      UNIQUE(student_id, school_year)
+    );
+
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id           TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+      action       TEXT NOT NULL,
+      performed_by TEXT NOT NULL,
+      school_year  TEXT,
+      details      TEXT,
+      created_at   TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_snapshots_student ON year_end_snapshots(student_id);
+    CREATE INDEX IF NOT EXISTS idx_snapshots_sy ON year_end_snapshots(school_year);
+    CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);
     CREATE INDEX IF NOT EXISTS idx_obligations_student ON obligations(student_id);
     CREATE INDEX IF NOT EXISTS idx_payments_student ON payments(student_id);
     CREATE INDEX IF NOT EXISTS idx_students_status ON students(status);

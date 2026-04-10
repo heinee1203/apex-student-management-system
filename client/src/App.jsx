@@ -12,6 +12,7 @@ import Fees from './pages/Fees';
 import Payments from './pages/Payments';
 import StatementOfAccount from './pages/StatementOfAccount';
 import SOAPrintPage from './pages/SOAPrintPage';
+import SOAPrintBatchPage from './pages/SOAPrintBatchPage';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Users from './pages/Users';
@@ -45,6 +46,7 @@ export default function App() {
 
         {/* Standalone print page */}
         <Route path="/soa/print/:studentId" element={isAuthenticated ? <SOAPrintPage /> : <Navigate to="/login" replace />} />
+        <Route path="/soa/print-batch" element={isAuthenticated ? <SOAPrintBatchPage /> : <Navigate to="/login" replace />} />
 
         {/* App layout with sidebar */}
         <Route path="*" element={

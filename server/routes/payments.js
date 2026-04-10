@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { requireRole } = require('../middleware/role');
+const { assertCanModifyYear } = require('../utils/schoolYearLock');
 
 // GET /api/payments
 router.get('/', (req, res) => {
@@ -42,6 +43,11 @@ router.post('/', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
       return res.status(400).json({ error: 'student_id, amount, date, and method are required' });
     }
 
+    if (school_year) {
+      const lockErr = assertCanModifyYear(req, school_year);
+      if (lockErr) return res.status(403).json({ error: lockErr });
+    }
+
     const student = db.prepare('SELECT student_id FROM students WHERE student_id = ?').get(student_id);
     if (!student) return res.status(404).json({ error: 'Student not found' });
 
@@ -73,6 +79,13 @@ router.put('/:id', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) =>
 
     const { student_id, amount, date, method, receipt_no, school_year, notes } = req.body;
 
+    const lockErrExisting = assertCanModifyYear(req, existing.school_year);
+    if (lockErrExisting) return res.status(403).json({ error: lockErrExisting });
+    if (school_year && school_year !== existing.school_year) {
+      const lockErrNew = assertCanModifyYear(req, school_year);
+      if (lockErrNew) return res.status(403).json({ error: lockErrNew });
+    }
+
     db.prepare(`
       UPDATE payments SET student_id = ?, amount = ?, date = ?, method = ?, receipt_no = ?, school_year = ?, notes = ?
       WHERE id = ?
@@ -94,6 +107,9 @@ router.delete('/:id', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res)
   try {
     const existing = db.prepare('SELECT * FROM payments WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Payment not found' });
+
+    const lockErr = assertCanModifyYear(req, existing.school_year);
+    if (lockErr) return res.status(403).json({ error: lockErr });
 
     db.prepare('DELETE FROM payments WHERE id = ?').run(req.params.id);
     res.json({ message: 'Payment deleted successfully' });

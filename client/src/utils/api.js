@@ -65,7 +65,9 @@ export const api = {
   deleteStudentPhoto: (studentId) => request(`/students/${studentId}/photo`, { method: 'DELETE' }),
 
   // Admin
+  endSchoolYearPreview: () => request('/admin/end-school-year-preview', { method: 'POST' }),
   endSchoolYear: (data) => request('/admin/end-school-year', { method: 'POST', body: JSON.stringify(data) }),
+  getAuditLog: () => request('/admin/audit-log'),
 
   // Obligations
   getObligations: (params = {}) => {
@@ -100,6 +102,7 @@ export const api = {
     const qs = new URLSearchParams(params).toString();
     return request(`/soa/${studentId}${qs ? `?${qs}` : ''}`);
   },
+  getBatchSOA: (sy) => request(`/soa/batch${sy ? `?school_year=${encodeURIComponent(sy)}` : ''}`),
 
   // Reports
   getReportByGradeLevel: (params = {}) => {
@@ -112,6 +115,7 @@ export const api = {
   },
   getReportScholarships: () => request('/reports/scholarships'),
   getReportOverdue: () => request('/reports/overdue'),
+  getReceivables: (sy) => request(`/reports/receivables${sy ? `?school_year=${encodeURIComponent(sy)}` : ''}`),
 
   // Settings
   getSettings: () => request('/settings'),

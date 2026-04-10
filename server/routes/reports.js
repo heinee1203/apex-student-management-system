@@ -101,4 +101,29 @@ router.get('/overdue', (req, res) => {
   }
 });
 
+// GET /api/reports/receivables?school_year=2025-2026
+router.get('/receivables', (req, res) => {
+  try {
+    const sy = req.query.school_year;
+    if (!sy) return res.status(400).json({ error: 'school_year is required' });
+
+    const result = db.prepare(`
+      SELECT s.student_id, s.first_name, s.last_name, s.grade_level, s.status,
+        COALESCE((SELECT SUM(amount) FROM obligations WHERE student_id = s.student_id AND school_year = ?), 0) as total_fees,
+        COALESCE((SELECT SUM(amount) FROM payments WHERE student_id = s.student_id AND school_year = ?), 0) as total_paid
+      FROM students s
+      WHERE EXISTS (SELECT 1 FROM obligations WHERE student_id = s.student_id AND school_year = ?)
+      AND COALESCE((SELECT SUM(amount) FROM obligations WHERE student_id = s.student_id AND school_year = ?), 0) >
+          COALESCE((SELECT SUM(amount) FROM payments WHERE student_id = s.student_id AND school_year = ?), 0)
+      ORDER BY s.last_name, s.first_name
+    `).all(sy, sy, sy, sy, sy);
+
+    const mapped = result.map(r => ({ ...r, balance: r.total_fees - r.total_paid }));
+    const grandTotal = mapped.reduce((sum, r) => sum + r.balance, 0);
+    res.json({ students: mapped, grandTotal, school_year: sy });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

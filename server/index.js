@@ -58,6 +58,40 @@ try {
   }
 }
 
+// Migrate: create year_end_snapshots and audit_log tables if missing
+try { db.prepare('SELECT id FROM year_end_snapshots LIMIT 1').get(); }
+catch {
+  db.exec(`
+    CREATE TABLE year_end_snapshots (
+      id             TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+      student_id     TEXT NOT NULL,
+      school_year    TEXT NOT NULL,
+      total_fees     REAL NOT NULL DEFAULT 0,
+      total_paid     REAL NOT NULL DEFAULT 0,
+      arrears_amount REAL NOT NULL DEFAULT 0,
+      snapshot_date  TEXT NOT NULL,
+      created_by     TEXT,
+      UNIQUE(student_id, school_year)
+    );
+    CREATE INDEX idx_snapshots_student ON year_end_snapshots(student_id);
+    CREATE INDEX idx_snapshots_sy ON year_end_snapshots(school_year);
+  `);
+}
+try { db.prepare('SELECT id FROM audit_log LIMIT 1').get(); }
+catch {
+  db.exec(`
+    CREATE TABLE audit_log (
+      id           TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+      action       TEXT NOT NULL,
+      performed_by TEXT NOT NULL,
+      school_year  TEXT,
+      details      TEXT,
+      created_at   TEXT DEFAULT (datetime('now','localtime'))
+    );
+    CREATE INDEX idx_audit_created ON audit_log(created_at);
+  `);
+}
+
 // One-time fix: correct school year from 2024-2025 to 2025-2026
 {
   const wrongSY = db.prepare("SELECT COUNT(*) as count FROM obligations WHERE school_year = '2024-2025'").get();

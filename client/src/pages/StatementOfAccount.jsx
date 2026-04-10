@@ -31,6 +31,10 @@ export default function StatementOfAccount({ onMenuClick }) {
     navigate(`/soa/print/${selectedStudent}?sy=${schoolYear}&t=${Date.now()}`);
   };
 
+  const generateBatchSOA = () => {
+    navigate(`/soa/print-batch?sy=${schoolYear}&t=${Date.now()}`);
+  };
+
   return (
     <div>
       <TopBar title="Statement of Account" onMenuClick={onMenuClick} />
@@ -58,6 +62,9 @@ export default function StatementOfAccount({ onMenuClick }) {
             </div>
             <button onClick={generateSOA} className="w-full bg-brand-steel hover:bg-brand-teal text-white py-2.5 rounded-lg text-sm font-medium transition-colors">
               Generate SOA
+            </button>
+            <button onClick={generateBatchSOA} className="w-full bg-white hover:bg-brand-light text-brand-navy border border-brand-border py-2.5 rounded-lg text-sm font-medium transition-colors">
+              Print All With Balance
             </button>
           </div>
         </div>
