@@ -33,7 +33,6 @@ export default function SOADocument({ data }) {
         <div><span className="font-semibold" style={{ color: '#2C5F6E' }}>Section:</span> {student.section || '—'}</div>
         <div><span className="font-semibold" style={{ color: '#2C5F6E' }}>Payment Term:</span> {payment_term || student?.payment_term || '—'}</div>
         <div><span className="font-semibold" style={{ color: '#2C5F6E' }}>S.Y.:</span> {school_year}</div>
-        <div><span className="font-semibold" style={{ color: '#2C5F6E' }}>Scholarship:</span> {student.scholarship || 'None'}</div>
         <div><span className="font-semibold" style={{ color: '#2C5F6E' }}>Status:</span> {student.status}</div>
         <div className="col-span-2"><span className="font-semibold" style={{ color: '#2C5F6E' }}>Date Issued:</span> {today}</div>
         </div>
@@ -98,17 +97,6 @@ export default function SOADocument({ data }) {
           </tr>
         </tbody>
       </table>
-
-      {/* Scholarship line */}
-      <div className="flex justify-between text-sm mb-1 px-1">
-        <span>Less: Scholarship Discount</span>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>(₱0.00)</span>
-      </div>
-      <hr style={{ borderColor: '#D6DDE2' }} className="mb-1" />
-      <div className="flex justify-between text-sm font-bold mb-4 px-1" style={{ color: '#1E3A44' }}>
-        <span>NET ASSESSED FEES</span>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(totals.totalFees)}</span>
-      </div>
 
       {/* Payment History */}
       <h3 className="font-bold text-sm mb-2 uppercase tracking-wider" style={{ color: '#2C5F6E' }}>Payment History</h3>

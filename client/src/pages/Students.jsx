@@ -16,9 +16,8 @@ const paymentTerms = ['Monthly', 'Quarterly', 'Annually'];
 const payStatuses = ['Paid', 'Partial', 'Unpaid', 'Overdue'];
 const statuses = ['Registered', 'Enrolled', 'Not Enrolled', 'Dropped', 'LOA', 'Graduated'];
 const editStatuses = ['Registered', 'Enrolled', 'Not Enrolled', 'LOA', 'Graduated'];
-const scholarships = ['None', 'Full Scholarship', 'Half Scholarship', 'Academic Scholar', 'Athletic Scholar', 'Government (TES)', 'CHED Scholarship', 'LGU Scholarship'];
 
-const emptyForm = { student_id: '', first_name: '', middle_name: '', last_name: '', grade_level: 'Nursery 1', section: '', lrn: '', birth_date: '', gender: '', status: 'Registered', email: '', phone: '', parent_name: '', guardian: '', guardian_phone: '', scholarship: 'None', date_enrolled: '', address: '', payment_term: 'Monthly', total_tuition: '', school_year: getCurrentSchoolYear() };
+const emptyForm = { student_id: '', first_name: '', middle_name: '', last_name: '', grade_level: 'Nursery 1', section: '', lrn: '', birth_date: '', gender: '', status: 'Registered', email: '', phone: '', parent_name: '', guardian: '', guardian_phone: '', date_enrolled: '', address: '', payment_term: 'Monthly', total_tuition: '', school_year: getCurrentSchoolYear() };
 
 export default function Students({ onMenuClick }) {
   const [students, setStudents] = useState([]);
@@ -76,7 +75,7 @@ export default function Students({ onMenuClick }) {
   const openAdd = () => { setEditing(null); setForm(emptyForm); setTuitionWarning(''); setModalOpen(true); };
   const openEdit = (s) => {
     setEditing(s.student_id);
-    setForm({ student_id: s.student_id, first_name: s.first_name, middle_name: s.middle_name || '', last_name: s.last_name, grade_level: s.grade_level, section: s.section || '', lrn: s.lrn || '', birth_date: s.birth_date || '', gender: s.gender || '', status: s.status, email: s.email || '', phone: s.phone || '', parent_name: s.parent_name || '', guardian: s.guardian || '', guardian_phone: s.guardian_phone || '', scholarship: s.scholarship || 'None', date_enrolled: s.date_enrolled || '', address: s.address || '', payment_term: s.payment_term || 'Monthly', total_tuition: s.total_tuition || '', school_year: s.school_year || '2024-2025' });
+    setForm({ student_id: s.student_id, first_name: s.first_name, middle_name: s.middle_name || '', last_name: s.last_name, grade_level: s.grade_level, section: s.section || '', lrn: s.lrn || '', birth_date: s.birth_date || '', gender: s.gender || '', status: s.status, email: s.email || '', phone: s.phone || '', parent_name: s.parent_name || '', guardian: s.guardian || '', guardian_phone: s.guardian_phone || '', date_enrolled: s.date_enrolled || '', address: s.address || '', payment_term: s.payment_term || 'Monthly', total_tuition: s.total_tuition || '', school_year: s.school_year || getCurrentSchoolYear() });
     setModalOpen(true);
   };
 
@@ -384,18 +383,10 @@ export default function Students({ onMenuClick }) {
               <div className="w-full bg-brand-light border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-navy font-semibold">{form.school_year}</div>
             </div>
           </div>
-          {/* Row 7: Scholarship | Date Enrolled */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-brand-slate mb-1">Scholarship</label>
-              <select value={form.scholarship} onChange={e => setField('scholarship', e.target.value)} className="w-full bg-white border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-navy focus:outline-none focus:border-brand-steel">
-                {scholarships.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-brand-slate mb-1">Date Enrolled</label>
-              <input type="date" value={form.date_enrolled} onChange={e => setField('date_enrolled', e.target.value)} className="w-full bg-white border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-navy focus:outline-none focus:border-brand-steel" />
-            </div>
+          {/* Row 7: Date Enrolled */}
+          <div>
+            <label className="block text-xs text-brand-slate mb-1">Date Enrolled</label>
+            <input type="date" value={form.date_enrolled} onChange={e => setField('date_enrolled', e.target.value)} className="w-full bg-white border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-navy focus:outline-none focus:border-brand-steel" />
           </div>
           {/* Row 8: Address (full width) */}
           <div>

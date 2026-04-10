@@ -27,10 +27,24 @@ function buildSOA(studentId, schoolYear) {
   const totalFees = obligations.reduce((sum, o) => sum + o.amount, 0);
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
 
-  // Calculate arrears from previous school years (prefer snapshots, fallback to calculation)
+  // Global all-years balance check — if the student is globally paid up
+  // (within rounding), there are NO arrears regardless of per-year splits.
+  // This prevents phantom arrears when a payment and its matching obligation
+  // were recorded with different school_year labels.
+  const allYearsFees = db.prepare(
+    'SELECT COALESCE(SUM(amount), 0) as total FROM obligations WHERE student_id = ?'
+  ).get(studentId).total;
+  const allYearsPaid = db.prepare(
+    'SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE student_id = ?'
+  ).get(studentId).total;
+  const globalBalance = allYearsFees - allYearsPaid;
+  const globallyPaidUp = Math.abs(globalBalance) < 1;
+
+  // Calculate arrears from previous school years (prefer snapshots, fallback to calculation).
+  // Skip this entirely if the student is globally paid up.
   let arrears = [];
   let totalArrears = 0;
-  if (schoolYear) {
+  if (schoolYear && !globallyPaidUp) {
     const prevYears = db.prepare(`
       SELECT DISTINCT school_year FROM (
         SELECT school_year FROM obligations WHERE student_id = ? AND school_year < ?
@@ -71,11 +85,13 @@ function buildSOA(studentId, schoolYear) {
   }
 
   const totalObligations = totalFees + totalArrears;
-  const remainingBalance = totalObligations - totalPaid;
+  const rawRemaining = totalObligations - totalPaid;
+  // Apply rounding fix: balances between -1 and 1 are treated as 0
+  const remainingBalance = Math.abs(rawRemaining) < 1 ? 0 : rawRemaining;
 
   let status = 'UNPAID';
   if (totalFees === 0 && totalArrears === 0) status = 'NO OUTSTANDING BALANCE';
-  else if (remainingBalance <= 0 && totalObligations > 0) status = 'FULLY PAID';
+  else if (globallyPaidUp || (remainingBalance <= 0 && totalObligations > 0)) status = 'FULLY PAID';
   else if (totalPaid > 0 && remainingBalance > 0) status = 'PARTIAL';
   else if (totalPaid === 0 && totalObligations > 0) status = 'UNPAID';
 

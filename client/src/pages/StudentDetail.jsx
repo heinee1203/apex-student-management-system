@@ -370,7 +370,6 @@ export default function StudentDetail({ onMenuClick }) {
                 <InlineEdit value={student.guardian_phone} displayValue={formatPhone(student.guardian_phone)} onSave={v => handleInlineSave('guardian_phone', v)} canEdit={canEdit} />
               </div>
               {[
-                ['Scholarship', student.scholarship],
                 ['Date Enrolled', formatDate(student.date_enrolled)],
                 ['Payment Term', student.payment_term],
               ].map(([label, val]) => (

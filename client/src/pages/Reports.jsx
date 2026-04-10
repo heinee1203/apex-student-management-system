@@ -7,7 +7,6 @@ import { getCurrentSchoolYear } from '../utils/schoolYear';
 export default function Reports({ onMenuClick }) {
   const [gradeReport, setGradeReport] = useState([]);
   const [methodReport, setMethodReport] = useState([]);
-  const [scholarshipReport, setScholarshipReport] = useState([]);
   const [overdueReport, setOverdueReport] = useState([]);
   const [receivables, setReceivables] = useState({ students: [], grandTotal: 0 });
   const [receivablesYear, setReceivablesYear] = useState(getCurrentSchoolYear());
@@ -17,12 +16,10 @@ export default function Reports({ onMenuClick }) {
     Promise.all([
       api.getReportByGradeLevel(),
       api.getReportByPaymentMethod(),
-      api.getReportScholarships(),
       api.getReportOverdue(),
-    ]).then(([g, m, s, o]) => {
+    ]).then(([g, m, o]) => {
       setGradeReport(g);
       setMethodReport(m);
-      setScholarshipReport(s);
       setOverdueReport(o);
     }).catch(console.error).finally(() => setLoading(false));
   }, []);
@@ -70,56 +67,31 @@ export default function Reports({ onMenuClick }) {
           </table>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Payments by Method */}
-          <div className="bg-white border border-brand-border rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-brand-border">
-              <h3 className="text-sm font-semibold text-brand-teal">Payments by Method</h3>
-            </div>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-brand-slate border-b border-brand-border">
-                  <th className="px-4 py-2">Method</th>
-                  <th className="px-4 py-2 text-right">Transactions</th>
-                  <th className="px-4 py-2 text-right">Total</th>
-                  <th className="px-4 py-2 text-right">Share</th>
-                </tr>
-              </thead>
-              <tbody>
-                {methodReport.map(r => (
-                  <tr key={r.method} className="border-b border-brand-border/50 hover:bg-brand-light/50">
-                    <td className="px-4 py-2 text-brand-navy">{r.method}</td>
-                    <td className="px-4 py-2 text-right text-brand-navy">{r.transaction_count}</td>
-                    <td className="px-4 py-2 text-right font-mono text-status-success">{formatCurrency(r.total_amount)}</td>
-                    <td className="px-4 py-2 text-right font-mono text-brand-navy">{r.share}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Payments by Method */}
+        <div className="bg-white border border-brand-border rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-brand-border">
+            <h3 className="text-sm font-semibold text-brand-teal">Payments by Method</h3>
           </div>
-
-          {/* Scholarship Distribution */}
-          <div className="bg-white border border-brand-border rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-brand-border">
-              <h3 className="text-sm font-semibold text-brand-teal">Scholarship Distribution</h3>
-            </div>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-brand-slate border-b border-brand-border">
-                  <th className="px-4 py-2">Scholarship Type</th>
-                  <th className="px-4 py-2 text-right">Students</th>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-brand-slate border-b border-brand-border">
+                <th className="px-4 py-2">Method</th>
+                <th className="px-4 py-2 text-right">Transactions</th>
+                <th className="px-4 py-2 text-right">Total</th>
+                <th className="px-4 py-2 text-right">Share</th>
+              </tr>
+            </thead>
+            <tbody>
+              {methodReport.map(r => (
+                <tr key={r.method} className="border-b border-brand-border/50 hover:bg-brand-light/50">
+                  <td className="px-4 py-2 text-brand-navy">{r.method}</td>
+                  <td className="px-4 py-2 text-right text-brand-navy">{r.transaction_count}</td>
+                  <td className="px-4 py-2 text-right font-mono text-status-success">{formatCurrency(r.total_amount)}</td>
+                  <td className="px-4 py-2 text-right font-mono text-brand-navy">{r.share}%</td>
                 </tr>
-              </thead>
-              <tbody>
-                {scholarshipReport.map(r => (
-                  <tr key={r.scholarship} className="border-b border-brand-border/50 hover:bg-brand-light/50">
-                    <td className="px-4 py-2 text-brand-navy">{r.scholarship}</td>
-                    <td className="px-4 py-2 text-right text-brand-navy">{r.student_count}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
 
         {/* Overdue Accounts */}

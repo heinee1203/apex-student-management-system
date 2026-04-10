@@ -113,7 +113,6 @@ export const api = {
     const qs = new URLSearchParams(params).toString();
     return request(`/reports/by-payment-method${qs ? `?${qs}` : ''}`);
   },
-  getReportScholarships: () => request('/reports/scholarships'),
   getReportOverdue: () => request('/reports/overdue'),
   getReceivables: (sy) => request(`/reports/receivables${sy ? `?school_year=${encodeURIComponent(sy)}` : ''}`),
 
