@@ -140,15 +140,16 @@ function getStudentYearView(db, studentId, studentRow, schoolYear) {
   const rawStatus = studentRow ? studentRow.status : null;
   const status = hasCurrentYearRecord ? rawStatus : 'Not Enrolled';
 
-  // Pay status derivation
+  // Pay status derivation — STRICTLY about current-year fees.
+  // Arrears are already visible in the Balance column; a student with
+  // unpaid arrears but no current-year assessment should render a BLANK
+  // badge, not "Unpaid" (they don't owe current-year fees).
   let payStatus = null;
-  if (currentFees === 0 && priorArrears === 0) {
-    payStatus = null; // blank — nothing owed, nothing assessed
-  } else if (currentFees === 0 && priorArrears > 0) {
-    payStatus = 'Unpaid'; // arrears only
+  if (currentFees === 0) {
+    payStatus = null; // blank — no current-year assessment
   } else {
     // Current year has fees assessed
-    if (currentBalance === 0 && priorArrears === 0) {
+    if (currentBalance === 0) {
       payStatus = 'Paid';
     } else if (currentPaid > 0) {
       payStatus = 'Partial';
@@ -162,7 +163,7 @@ function getStudentYearView(db, studentId, studentRow, schoolYear) {
        WHERE student_id = ? AND school_year = ?
          AND due_date IS NOT NULL AND due_date < ?`
     ).get(studentId, schoolYear, today).c > 0;
-    if (balance > 0 && hasOverdue) payStatus = 'Overdue';
+    if (currentBalance > 0 && hasOverdue) payStatus = 'Overdue';
   }
 
   return {

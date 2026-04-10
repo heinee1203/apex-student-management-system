@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { getYearFlooredBalance, getStudentsWithBalance } = require('../utils/studentBalance');
+const { getYearFlooredBalance, getStudentYearView, getStudentsWithBalance } = require('../utils/studentBalance');
 
 // GET /api/dashboard/school-years — school years available in dropdowns.
 // Returns the union of: years that have data (obligations/payments/students)
@@ -43,16 +43,16 @@ router.get('/school-years', (req, res) => {
 });
 
 // GET /api/dashboard/stats?school_year=2025-2026
-// CRITICAL: balance math (Outstanding, Fully Paid, per-student balances) is
-// computed ACROSS ALL YEARS so it matches the Student Profile exactly. The
-// school_year parameter is IGNORED for balance calculations because payments
-// may be labeled with a different school_year than the obligations they cover
-// (e.g., a 2025-2026 tuition paid in advance during 2024-2025). Filtering by
-// year would split payments from their obligations and produce phantom balances.
-//
-// Total Fees / Total Collected still respect the year filter — those answer
-// "how much was assessed / collected in this school year?" which is a
-// different question and can diverge from Outstanding.
+// All figures respect the selected school year context:
+//   totalStudents    — enrolled for this SY
+//   totalFees        — obligations assessed in this SY
+//   totalCollected   — payments tagged to this SY
+//   currentOutstanding — Σ max(0, fees_y - paid_y) for THIS SY across all students
+//   priorArrears     — Σ max(0, fees_y - paid_y) for all years < THIS SY
+//   outstanding      — currentOutstanding + priorArrears (kept for backwards compat)
+//   fullyPaid        — count of students who (a) are enrolled this SY,
+//                      (b) had fees assessed, (c) have currentBalance === 0
+//   collectionRate   — null when totalFees === 0 (shown as "—" in UI)
 router.get('/stats', (req, res) => {
   try {
     const sy = req.query.school_year || null;
@@ -61,7 +61,6 @@ router.get('/stats', (req, res) => {
       ? db.prepare(`SELECT COUNT(*) as count FROM students WHERE status = 'Enrolled' AND school_year = ?`).get(sy).count
       : db.prepare(`SELECT COUNT(*) as count FROM students WHERE status = 'Enrolled'`).get().count;
 
-    // "This year" fees and collected — respect school_year filter
     const totalFees = sy
       ? db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM obligations WHERE school_year = ?`).get(sy).total
       : db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM obligations`).get().total;
@@ -69,28 +68,49 @@ router.get('/stats', (req, res) => {
       ? db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE school_year = ?`).get(sy).total
       : db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM payments`).get().total;
 
-    // Outstanding and Fully Paid — computed per-year-floored across all years,
-    // matching the spec: Σ max(0, fees_y - paid_y). Overpayments in one year
-    // never offset underpayments in another year.
-    // The per-year-floored balance can never be negative, so "fully paid" is
-    // balance === 0 (with f > 0 to exclude students with no fees at all).
-    const allStudents = db.prepare(`SELECT student_id FROM students`).all();
-    let outstanding = 0;
+    const allStudents = db.prepare(`SELECT * FROM students`).all();
+    let currentOutstanding = 0;
+    let priorArrears = 0;
     let fullyPaid = 0;
-    for (const { student_id } of allStudents) {
-      const { totalFees: f, balance } = getYearFlooredBalance(db, student_id);
-      if (balance > 0) outstanding += balance;
-      if (balance === 0 && f > 0) fullyPaid++;
+
+    if (sy) {
+      // Per-SY view: split balance into current-year and prior-year buckets
+      // and only count fullyPaid among students enrolled for THIS year with
+      // fees actually assessed.
+      for (const s of allStudents) {
+        const view = getStudentYearView(db, s.student_id, s, sy);
+        currentOutstanding += view.currentBalance;
+        priorArrears += view.priorArrears;
+        if (
+          s.status === 'Enrolled' &&
+          s.school_year === sy &&
+          view.currentFees > 0 &&
+          view.currentBalance === 0
+        ) {
+          fullyPaid++;
+        }
+      }
+    } else {
+      // Global view: currentOutstanding = full year-floored balance,
+      // priorArrears = 0 (no year anchor to split against).
+      for (const s of allStudents) {
+        const { totalFees: f, balance } = getYearFlooredBalance(db, s.student_id);
+        currentOutstanding += balance;
+        if (balance === 0 && f > 0) fullyPaid++;
+      }
     }
 
-    const collectionRate = totalFees > 0 ? ((totalCollected / totalFees) * 100) : 0;
+    const outstanding = currentOutstanding + priorArrears;
+    const collectionRate = totalFees > 0 ? ((totalCollected / totalFees) * 100) : null;
 
     res.json({
       totalStudents,
       totalFees: Math.round(totalFees * 100) / 100,
       totalCollected: Math.round(totalCollected * 100) / 100,
       outstanding: Math.round(outstanding * 100) / 100,
-      collectionRate: Math.round(collectionRate * 100) / 100,
+      currentOutstanding: Math.round(currentOutstanding * 100) / 100,
+      priorArrears: Math.round(priorArrears * 100) / 100,
+      collectionRate: collectionRate === null ? null : Math.round(collectionRate * 100) / 100,
       fullyPaid,
     });
   } catch (err) {

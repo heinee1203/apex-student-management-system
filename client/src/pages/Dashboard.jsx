@@ -68,8 +68,17 @@ export default function Dashboard({ onMenuClick }) {
           <StatCard label="Enrolled Students" value={stats?.totalStudents || 0} color="cyan" />
           <StatCard label="Total Fees" value={formatCurrency(stats?.totalFees)} color="blue" />
           <StatCard label="Total Collected" value={formatCurrency(stats?.totalCollected)} color="emerald" />
-          <StatCard label="Outstanding" value={formatCurrency(stats?.outstanding)} color="red" />
-          <StatCard label="Collection Rate" value={`${stats?.collectionRate || 0}%`} color="amber" />
+          <StatCard
+            label="Outstanding"
+            value={formatCurrency(stats?.currentOutstanding ?? stats?.outstanding ?? 0)}
+            sub={stats?.priorArrears > 0 ? `+ ${formatCurrency(stats.priorArrears)} prior arrears` : 'Current year'}
+            color="red"
+          />
+          <StatCard
+            label="Collection Rate"
+            value={stats?.collectionRate == null ? '—' : `${stats.collectionRate}%`}
+            color="amber"
+          />
           <StatCard label="Fully Paid" value={stats?.fullyPaid || 0} color="purple" />
         </div>
 
