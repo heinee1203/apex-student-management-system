@@ -22,9 +22,16 @@ router.get('/school-years', (req, res) => {
 });
 
 // GET /api/dashboard/stats?school_year=2025-2026
-// All per-student balance logic goes through getStudentBalance() so that the
-// Outstanding KPI sum exactly equals the sum of the Students With Balance list
-// and both apply the same rounding fix (|balance| < 1 → 0).
+// CRITICAL: balance math (Outstanding, Fully Paid, per-student balances) is
+// computed ACROSS ALL YEARS so it matches the Student Profile exactly. The
+// school_year parameter is IGNORED for balance calculations because payments
+// may be labeled with a different school_year than the obligations they cover
+// (e.g., a 2025-2026 tuition paid in advance during 2024-2025). Filtering by
+// year would split payments from their obligations and produce phantom balances.
+//
+// Total Fees / Total Collected still respect the year filter — those answer
+// "how much was assessed / collected in this school year?" which is a
+// different question and can diverge from Outstanding.
 router.get('/stats', (req, res) => {
   try {
     const sy = req.query.school_year || null;
@@ -33,25 +40,22 @@ router.get('/stats', (req, res) => {
       ? db.prepare(`SELECT COUNT(*) as count FROM students WHERE status = 'Enrolled' AND school_year = ?`).get(sy).count
       : db.prepare(`SELECT COUNT(*) as count FROM students WHERE status = 'Enrolled'`).get().count;
 
-    // Find every student who has obligations or payments in the filtered year
-    const studentIdRows = sy
-      ? db.prepare(`
-          SELECT DISTINCT student_id FROM (
-            SELECT student_id FROM obligations WHERE school_year = ?
-            UNION
-            SELECT student_id FROM payments WHERE school_year = ?
-          )
-        `).all(sy, sy)
-      : db.prepare(`SELECT student_id FROM students`).all();
+    // "This year" fees and collected — respect school_year filter
+    const totalFees = sy
+      ? db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM obligations WHERE school_year = ?`).get(sy).total
+      : db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM obligations`).get().total;
+    const totalCollected = sy
+      ? db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE school_year = ?`).get(sy).total
+      : db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM payments`).get().total;
 
-    let totalFees = 0;
-    let totalCollected = 0;
+    // Outstanding and Fully Paid — computed ACROSS ALL YEARS per student, no sy filter.
+    // This matches how the Student Profile calculates balance (see students.js GET /:studentId)
+    // so Dashboard numbers and Profile numbers always agree.
+    const allStudents = db.prepare(`SELECT student_id FROM students`).all();
     let outstanding = 0;
     let fullyPaid = 0;
-    for (const { student_id } of studentIdRows) {
-      const { totalFees: f, totalPaid: p, balance } = getStudentBalance(db, student_id, sy);
-      totalFees += f;
-      totalCollected += p;
+    for (const { student_id } of allStudents) {
+      const { totalFees: f, balance } = getStudentBalance(db, student_id); // no year — all years
       if (balance > 0) outstanding += balance;
       if (balance <= 0 && f > 0) fullyPaid++;
     }
@@ -93,21 +97,20 @@ router.get('/recent-payments', (req, res) => {
   }
 });
 
-// GET /api/dashboard/balance-list?school_year=2025-2026
-// Returns all students with balance > 0 using the shared getStudentBalance helper
-// so the sum of balances equals the Outstanding KPI exactly. The rounding fix
-// (|balance| < 1 → 0) prevents -₱0.01 rounding artifacts from showing as balances.
+// GET /api/dashboard/balance-list
+// Returns students with TOTAL balance > 0 across all years. This matches the
+// Student Profile's balance calculation exactly. The school_year query param
+// is accepted but IGNORED for balance math — see /stats comment above for
+// why cross-year filtering creates phantom balances.
 router.get('/balance-list', (req, res) => {
   try {
-    const sy = req.query.school_year || null;
-
     const students = db.prepare(`
       SELECT student_id, first_name, last_name, grade_level, section, status FROM students
     `).all();
 
     const result = [];
     for (const s of students) {
-      const { totalFees, totalPaid, balance } = getStudentBalance(db, s.student_id, sy);
+      const { totalFees, totalPaid, balance } = getStudentBalance(db, s.student_id); // no year — all years
       if (balance > 0) {
         result.push({ ...s, total_fees: totalFees, total_paid: totalPaid, balance });
       }
