@@ -693,7 +693,7 @@ export default function Settings({ onMenuClick }) {
                 <h4 className="text-sm font-semibold text-brand-navy">What this will do:</h4>
                 <ul className="text-sm text-brand-slate space-y-1 list-disc list-inside">
                   <li>Snapshot every student's arrears for the current school year</li>
-                  <li>Promote <strong>Enrolled</strong> students to the next grade level</li>
+                  <li>Promote <strong>Enrolled</strong> students to the next grade level and set to <strong>Not Enrolled</strong></li>
                   <li>Grade 6 students will be marked as <strong>Graduated</strong></li>
                   <li>LOA students → Not Enrolled (no grade change)</li>
                   <li>Clear sections on promoted students</li>
