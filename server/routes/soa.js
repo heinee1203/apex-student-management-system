@@ -107,30 +107,36 @@ function buildSOA(studentId, schoolYear) {
 }
 
 // GET /api/soa/batch?school_year=2025-2026 — all students with balance > 0
+// Finds every student whose total fees (all years) exceeds their total
+// payments (all years), regardless of status or which school year their
+// obligations were assessed in. Non-enrolled students with prior-year
+// arrears (e.g. Pelausa, Calma) are included. Matches the same definition
+// the dashboard /balance-list uses so both views agree on who owes money.
 router.get('/batch', (req, res) => {
   try {
     const { school_year } = req.query;
     if (!school_year) return res.status(400).json({ error: 'school_year is required' });
 
-    // Find all students with obligations in this year
-    const studentIds = db.prepare(`
-      SELECT DISTINCT student_id FROM obligations WHERE school_year = ? ORDER BY student_id
-    `).all(school_year);
+    const studentsWithBalance = db.prepare(`
+      SELECT s.student_id
+      FROM students s
+      LEFT JOIN (
+        SELECT student_id, SUM(amount) as total_fees FROM obligations GROUP BY student_id
+      ) o_sum ON o_sum.student_id = s.student_id
+      LEFT JOIN (
+        SELECT student_id, SUM(amount) as total_paid FROM payments GROUP BY student_id
+      ) p_sum ON p_sum.student_id = s.student_id
+      WHERE COALESCE(o_sum.total_fees, 0) - COALESCE(p_sum.total_paid, 0) > 1
+      ORDER BY s.last_name, s.first_name
+    `).all();
 
     const results = [];
-    for (const { student_id } of studentIds) {
+    for (const { student_id } of studentsWithBalance) {
       const soa = buildSOA(student_id, school_year);
       if (soa && soa.totals.remainingBalance > 0) {
         results.push(soa);
       }
     }
-
-    // Sort by last name, first name
-    results.sort((a, b) => {
-      const aName = `${a.student.last_name}, ${a.student.first_name}`;
-      const bName = `${b.student.last_name}, ${b.student.first_name}`;
-      return aName.localeCompare(bName);
-    });
 
     res.json(results);
   } catch (err) {
