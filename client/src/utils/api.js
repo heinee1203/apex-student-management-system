@@ -65,9 +65,9 @@ export const api = {
   deleteStudentPhoto: (studentId) => request(`/students/${studentId}/photo`, { method: 'DELETE' }),
 
   // Admin
-  endSchoolYearPreview: () => request('/admin/end-school-year-preview', { method: 'POST' }),
-  endSchoolYear: (data) => request('/admin/end-school-year', { method: 'POST', body: JSON.stringify(data) }),
   getAuditLog: () => request('/admin/audit-log'),
+  // One-shot cleanup used to wipe EOY leftovers from the DB. Admin-only.
+  cleanupEoyArtifacts: (body) => request('/admin/cleanup-eoy-artifacts', { method: 'POST', body: JSON.stringify(body) }),
 
   // Obligations
   getObligations: (params = {}) => {

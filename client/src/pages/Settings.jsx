@@ -63,18 +63,7 @@ export default function Settings({ onMenuClick }) {
   const [dfForm, setDfForm] = useState({ grade_level: 'ALL', fee_type: '', amount: '', description: '' });
   const [dfDeleteTarget, setDfDeleteTarget] = useState(null);
 
-  // Tab 5: School Year Management
-  const [endYearConfirm, setEndYearConfirm] = useState('');
-  const [promoteStudents, setPromoteStudents] = useState(true);
-  const [clearSectionsFlag, setClearSectionsFlag] = useState(true);
-  const [lockYearFlag, setLockYearFlag] = useState(true);
-  const [endingYear, setEndingYear] = useState(false);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [preview, setPreview] = useState(null);
-  const [previewModalOpen, setPreviewModalOpen] = useState(false);
-  const [endYearResult, setEndYearResult] = useState(null);
-
-  // Tab 6: Audit Log
+  // Tab 5: Audit Log
   const [auditEntries, setAuditEntries] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
 
@@ -352,41 +341,6 @@ export default function Settings({ onMenuClick }) {
     }
   }, [activeTab]);
 
-  const handleOpenPreview = async () => {
-    try {
-      setPreviewLoading(true);
-      const data = await api.endSchoolYearPreview();
-      setPreview(data);
-      setEndYearConfirm('');
-      setPreviewModalOpen(true);
-    } catch (err) {
-      addToast(err.message, 'error');
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
-
-  const handleEndSchoolYear = async () => {
-    if (endYearConfirm !== 'CONFIRM') return;
-    try {
-      setEndingYear(true);
-      const result = await api.endSchoolYear({
-        confirm: 'CONFIRM',
-        promote: promoteStudents,
-        clearSections: clearSectionsFlag,
-        lockYear: lockYearFlag,
-      });
-      setPreviewModalOpen(false);
-      setEndYearResult(result);
-      setEndYearConfirm('');
-      addToast('School year ended successfully');
-    } catch (err) {
-      addToast(err.message, 'error');
-    } finally {
-      setEndingYear(false);
-    }
-  };
-
   const loadAuditLog = async () => {
     try {
       setAuditLoading(true);
@@ -410,7 +364,6 @@ export default function Settings({ onMenuClick }) {
     { id: 'tuition', label: 'Tuition Fee Schedule' },
     { id: 'feeTypes', label: 'Fee Types' },
     { id: 'defaultFees', label: 'Default Fees' },
-    { id: 'schoolYear', label: 'School Year' },
     { id: 'auditLog', label: 'Audit Log' },
   ];
 
@@ -682,39 +635,7 @@ export default function Settings({ onMenuClick }) {
             </div>
           </div>
         )}
-        {/* Tab 5: School Year */}
-        {activeTab === 'schoolYear' && (
-          <div className="max-w-2xl mx-auto">
-            <div className="bg-white border border-brand-border rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-brand-navy mb-2">End of School Year</h3>
-              <p className="text-sm text-brand-slate mb-6">Review the impact before transitioning to the next school year. Arrears will be snapshotted, the year will be locked, and students will be promoted.</p>
-
-              <div className="bg-brand-light rounded-lg p-4 mb-6 space-y-2">
-                <h4 className="text-sm font-semibold text-brand-navy">What this will do:</h4>
-                <ul className="text-sm text-brand-slate space-y-1 list-disc list-inside">
-                  <li>Snapshot every student's arrears for the current school year</li>
-                  <li>Promote <strong>Enrolled</strong> students to the next grade level and set to <strong>Not Enrolled</strong></li>
-                  <li>Grade 6 students will be marked as <strong>Graduated</strong></li>
-                  <li>LOA students → Not Enrolled (no grade change)</li>
-                  <li>Clear sections on promoted students</li>
-                  <li>Lock the current school year from further edits (Admin override)</li>
-                  <li>Update the current school year in settings</li>
-                  <li>Write an entry to the audit log</li>
-                </ul>
-              </div>
-
-              <button
-                onClick={handleOpenPreview}
-                disabled={previewLoading}
-                className="bg-brand-steel hover:bg-brand-teal disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors"
-              >
-                {previewLoading ? 'Loading preview...' : 'Preview Impact'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 6: Audit Log */}
+        {/* Tab 5: Audit Log */}
         {activeTab === 'auditLog' && (
           <div className="bg-white border border-brand-border rounded-xl overflow-hidden">
             <div className="px-5 py-3 border-b border-brand-border">
@@ -760,138 +681,6 @@ export default function Settings({ onMenuClick }) {
           </div>
         )}
       </div>
-
-      {/* End of Year Preview Modal */}
-      <Modal isOpen={previewModalOpen} onClose={() => setPreviewModalOpen(false)} title={`End of School Year — S.Y. ${preview?.currentSchoolYear || ''}`} wide>
-        {preview && (
-          <div className="space-y-4">
-            <div className="bg-brand-light rounded-lg p-4">
-              <h4 className="text-sm font-semibold text-brand-navy mb-2">Student Impact</h4>
-              <div className="grid grid-cols-2 gap-y-1 text-sm">
-                <div className="text-brand-slate">Enrolled → Not Enrolled + Promoted:</div>
-                <div className="font-semibold text-brand-navy text-right">{preview.promoting}</div>
-                <div className="text-brand-slate">Grade 6 → Graduated:</div>
-                <div className="font-semibold text-brand-navy text-right">{preview.graduating}</div>
-                <div className="text-brand-slate">LOA → Not Enrolled (no promotion):</div>
-                <div className="font-semibold text-brand-navy text-right">{preview.loa}</div>
-                <div className="text-brand-slate">Dropped (no change):</div>
-                <div className="font-semibold text-brand-navy text-right">{preview.dropped}</div>
-                <div className="text-brand-slate">Registered (no change):</div>
-                <div className="font-semibold text-brand-navy text-right">{preview.registered}</div>
-                <div className="text-brand-slate">Not Enrolled (no change):</div>
-                <div className="font-semibold text-brand-navy text-right">{preview.notEnrolled}</div>
-              </div>
-            </div>
-
-            <div className="bg-status-danger/5 border border-status-danger/20 rounded-lg p-4">
-              <h4 className="text-sm font-semibold text-status-danger mb-2">⚠ Outstanding Balances</h4>
-              <div className="text-sm mb-3">
-                <span className="text-brand-slate">Students with arrears: </span>
-                <span className="font-semibold text-brand-navy">{preview.arrearsStudents.length}</span>
-                <span className="text-brand-slate ml-4">Total outstanding: </span>
-                <span className="font-semibold text-status-danger font-mono">{formatCurrency(preview.arrearsTotal)}</span>
-              </div>
-              {preview.arrearsStudents.length > 0 && (
-                <div className="max-h-48 overflow-y-auto bg-white rounded border border-brand-border">
-                  <table className="w-full text-xs">
-                    <thead className="sticky top-0 bg-brand-light">
-                      <tr className="text-brand-slate border-b border-brand-border">
-                        <th className="px-3 py-2 text-left">Student</th>
-                        <th className="px-3 py-2 text-left">Grade</th>
-                        <th className="px-3 py-2 text-right">Balance</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {preview.arrearsStudents.map(s => (
-                        <tr key={s.student_id} className="border-b border-brand-border/40">
-                          <td className="px-3 py-1.5 text-brand-navy">{s.name}</td>
-                          <td className="px-3 py-1.5 text-brand-slate">{s.grade_level}</td>
-                          <td className="px-3 py-1.5 text-right text-status-danger font-mono">{formatCurrency(s.balance)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            <div className={`rounded-lg p-4 border ${preview.nextYearTuitionExists ? 'bg-status-success/5 border-status-success/20' : 'bg-status-warning/5 border-status-warning/20'}`}>
-              <h4 className="text-sm font-semibold text-brand-navy mb-1">Tuition Schedule Check</h4>
-              {preview.nextYearTuitionExists ? (
-                <p className="text-sm text-status-success">✓ Tuition rates for S.Y. {preview.nextSchoolYear} exist</p>
-              ) : (
-                <p className="text-sm text-status-warning">⚠ No tuition rates for S.Y. {preview.nextSchoolYear}. Set them up in Settings → Tuition Fee Schedule before re-enrolling students.</p>
-              )}
-            </div>
-
-            <div className="space-y-2 pt-2 border-t border-brand-border">
-              <label className="flex items-center gap-3 text-sm text-brand-navy">
-                <input type="checkbox" checked={promoteStudents} onChange={e => setPromoteStudents(e.target.checked)} className="rounded" />
-                Promote students to next grade level
-              </label>
-              <label className="flex items-center gap-3 text-sm text-brand-navy">
-                <input type="checkbox" checked={clearSectionsFlag} onChange={e => setClearSectionsFlag(e.target.checked)} className="rounded" />
-                Clear section assignments
-              </label>
-              <label className="flex items-center gap-3 text-sm text-brand-navy">
-                <input type="checkbox" checked={lockYearFlag} onChange={e => setLockYearFlag(e.target.checked)} className="rounded" />
-                Lock S.Y. {preview.currentSchoolYear} from further edits
-              </label>
-            </div>
-
-            <div>
-              <label className="block text-xs text-brand-slate mb-1">Type "CONFIRM" to proceed</label>
-              <input
-                type="text"
-                value={endYearConfirm}
-                onChange={e => setEndYearConfirm(e.target.value)}
-                placeholder="CONFIRM"
-                className="w-full bg-white border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-navy focus:outline-none focus:border-brand-steel"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setPreviewModalOpen(false)}
-                className="px-4 py-2 text-sm text-brand-navy bg-brand-light hover:bg-brand-border rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEndSchoolYear}
-                disabled={endYearConfirm !== 'CONFIRM' || endingYear}
-                className="px-6 py-2 text-sm text-white bg-status-danger hover:bg-status-danger/90 rounded-lg disabled:opacity-40"
-              >
-                {endingYear ? 'Processing...' : 'End School Year'}
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* End of Year Success Modal */}
-      <Modal isOpen={!!endYearResult} onClose={() => setEndYearResult(null)} title="School Year Ended">
-        {endYearResult && (
-          <div className="space-y-4">
-            <div className="bg-status-success/5 border border-status-success/20 rounded-lg p-4">
-              <p className="text-sm font-semibold text-status-success mb-2">✓ {endYearResult.message}</p>
-              <p className="text-xs text-brand-slate">Active school year is now <strong className="text-brand-navy">{endYearResult.nextSchoolYear}</strong></p>
-            </div>
-            <div className="bg-brand-light rounded-lg p-4 text-sm space-y-1">
-              <div className="flex justify-between"><span className="text-brand-slate">Promoted:</span><span className="font-semibold text-brand-navy">{endYearResult.promoted}</span></div>
-              <div className="flex justify-between"><span className="text-brand-slate">Graduated:</span><span className="font-semibold text-brand-navy">{endYearResult.graduated}</span></div>
-              <div className="flex justify-between"><span className="text-brand-slate">LOA reset:</span><span className="font-semibold text-brand-navy">{endYearResult.loaReset}</span></div>
-              <div className="flex justify-between"><span className="text-brand-slate">Arrears snapshotted:</span><span className="font-semibold text-brand-navy">{endYearResult.arrearsSnapshotted}</span></div>
-              <div className="flex justify-between"><span className="text-brand-slate">Total arrears:</span><span className="font-semibold text-status-danger font-mono">{formatCurrency(endYearResult.arrearsTotal)}</span></div>
-              <div className="flex justify-between"><span className="text-brand-slate">Year locked:</span><span className="font-semibold text-brand-navy">{endYearResult.yearLocked ? 'Yes' : 'No'}</span></div>
-            </div>
-            <div className="flex justify-end">
-              <button onClick={() => setEndYearResult(null)} className="px-4 py-2 text-sm text-white bg-brand-steel hover:bg-brand-teal rounded-lg">Close</button>
-            </div>
-          </div>
-        )}
-      </Modal>
 
       <ConfirmDialog
         isOpen={!!deleteFeeTarget}

@@ -5,33 +5,19 @@ const { getYearFlooredBalance, getStudentYearView, getStudentsWithBalance } = re
 
 // GET /api/dashboard/school-years — school years available in dropdowns.
 // Returns { years, current } where:
-//   years    = union of: years that have data (obligations/payments/students)
-//              + the date-computed current SY + next + prev (so registrars
-//              can pre-configure tuition/fees for the upcoming year)
-//   current  = the DB's school_settings.current_school_year — the
-//              AUTHORITATIVE "active" school year that every page should
-//              default their dropdown to. Falls back to the date-computed
-//              value only if the setting is missing.
-//
-// The shape is { years, current } (not a bare array) so every page can
-// initialize its SY state consistently and honor an admin rollback via
-// End-of-Year revert.
+//   years    = the distinct school_year values that actually exist in the
+//              DB (from obligations, payments, or students). No auto-
+//              generated future years, no date-computed rollovers.
+//   current  = school_settings.current_school_year — the authoritative
+//              "active" school year that every page defaults its dropdown
+//              to. Always included in `years` so the dropdown can render
+//              it even if no data exists for it yet.
 router.get('/school-years', (req, res) => {
   try {
-    // Date-computed SY for inclusion in the dropdown set
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = now.getMonth() + 1;
-    const dateComputed = m >= 6 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
-    const [ca] = dateComputed.split('-').map(Number);
-    const next = `${ca + 1}-${ca + 2}`;
-    const prev = `${ca - 1}-${ca}`;
-
-    // Authoritative current SY from the DB setting
     const row = db.prepare(
       `SELECT value FROM school_settings WHERE key = 'current_school_year'`
     ).get();
-    const current = (row && row.value) || dateComputed;
+    const current = (row && row.value) || null;
 
     const rows = db.prepare(`
       SELECT DISTINCT school_year FROM (
@@ -44,10 +30,7 @@ router.get('/school-years', (req, res) => {
     `).all();
 
     const set = new Set(rows.map(r => r.school_year).filter(Boolean));
-    set.add(prev);
-    set.add(dateComputed);
-    set.add(next);
-    set.add(current); // ensure the DB current is always present
+    if (current) set.add(current);
 
     const years = [...set].sort().reverse();
     res.json({ years, current });
