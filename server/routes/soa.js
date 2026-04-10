@@ -29,10 +29,14 @@ function buildSOA(studentId, schoolYear) {
   const totalFees = obligations.reduce((sum, o) => sum + o.amount, 0);
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
 
-  // Arrears (previous school years' unpaid obligations). Prefer year_end_snapshots
-  // if they exist (locked-in values), otherwise fall back to obligations - payments
-  // per prior year. If the student is globally paid up already (payments cover
-  // everything), skip the arrears section entirely.
+  // Arrears = prior-year FEES ONLY. Do NOT subtract payments per-year here —
+  // the Payment History table shows ALL payments, and the summary subtracts
+  // ALL payments from (currentFees + priorYearFees) exactly once. Subtracting
+  // payments per-year in this section + again in the summary would double-count
+  // payments that happened to fall in a prior school year.
+  //
+  // We still skip the section entirely when the student is globally paid up,
+  // so fully-settled students don't see a phantom "Previous Arrears" header.
   const allYearsFees = db.prepare(
     'SELECT COALESCE(SUM(amount), 0) as total FROM obligations WHERE student_id = ?'
   ).get(studentId).total;
@@ -42,44 +46,24 @@ function buildSOA(studentId, schoolYear) {
   let totalArrears = 0;
   if (schoolYear && !globallyPaidUp) {
     const prevYears = db.prepare(`
-      SELECT DISTINCT school_year FROM (
-        SELECT school_year FROM obligations WHERE student_id = ? AND school_year < ?
-        UNION
-        SELECT school_year FROM year_end_snapshots WHERE student_id = ? AND school_year < ?
-      ) ORDER BY school_year ASC
-    `).all(studentId, schoolYear, studentId, schoolYear);
+      SELECT DISTINCT school_year FROM obligations
+      WHERE student_id = ? AND school_year < ?
+      ORDER BY school_year ASC
+    `).all(studentId, schoolYear);
 
     for (const py of prevYears) {
-      const snap = db.prepare(
-        `SELECT * FROM year_end_snapshots WHERE student_id = ? AND school_year = ?`
-      ).get(studentId, py.school_year);
-
-      if (snap) {
-        if (snap.arrears_amount > 0) {
-          arrears.push({
-            school_year: snap.school_year,
-            total_fees: snap.total_fees,
-            total_paid: snap.total_paid,
-            balance: snap.arrears_amount,
-          });
-          totalArrears += snap.arrears_amount;
-        }
-      } else {
-        const pyFees = db.prepare(
-          `SELECT COALESCE(SUM(amount), 0) as total FROM obligations WHERE student_id = ? AND school_year = ?`
-        ).get(studentId, py.school_year).total;
-        const pyPaid = db.prepare(
-          `SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE student_id = ? AND school_year = ?`
-        ).get(studentId, py.school_year).total;
-        const pyBalance = pyFees - pyPaid;
-        if (pyBalance > 0) {
-          arrears.push({ school_year: py.school_year, total_fees: pyFees, total_paid: pyPaid, balance: pyBalance });
-          totalArrears += pyBalance;
-        }
+      const pyFees = db.prepare(
+        `SELECT COALESCE(SUM(amount), 0) as total FROM obligations WHERE student_id = ? AND school_year = ?`
+      ).get(studentId, py.school_year).total;
+      if (pyFees > 0) {
+        arrears.push({ school_year: py.school_year, total_fees: pyFees });
+        totalArrears += pyFees;
       }
     }
   }
 
+  // totalObligations = current-year fees + raw prior-year fees
+  // remainingBalance  = totalObligations - ALL payments (applied ONCE, here)
   const totalObligations = totalFees + totalArrears;
   const rawRemaining = totalObligations - totalPaid;
   // Apply rounding fix: balances between -1 and 1 are treated as 0

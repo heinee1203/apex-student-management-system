@@ -38,30 +38,26 @@ export default function SOADocument({ data }) {
         </div>
       </div>
 
-      {/* Previous Arrears */}
+      {/* Previous Arrears — prior-year FEES only; payments are applied once in the summary */}
       {arrears && arrears.length > 0 && (
         <>
-          <h3 className="font-bold text-sm mb-2 uppercase tracking-wider" style={{ color: '#C0504D' }}>Previous Arrears</h3>
+          <h3 className="font-bold text-sm mb-2 uppercase tracking-wider" style={{ color: '#C0504D' }}>Previous Arrears (Prior Year Fees)</h3>
           <table className="w-full mb-4 text-sm" style={{ border: '1px solid #D6DDE2' }}>
             <thead>
               <tr style={{ backgroundColor: '#C0504D', color: 'white' }}>
                 <th className="px-3 py-1.5 text-left" style={{ border: '1px solid #C0504D' }}>School Year</th>
-                <th className="px-3 py-1.5 text-right" style={{ border: '1px solid #C0504D' }}>Total Fees (₱)</th>
-                <th className="px-3 py-1.5 text-right" style={{ border: '1px solid #C0504D' }}>Total Paid (₱)</th>
-                <th className="px-3 py-1.5 text-right" style={{ border: '1px solid #C0504D' }}>Balance (₱)</th>
+                <th className="px-3 py-1.5 text-right" style={{ border: '1px solid #C0504D' }}>Amount (₱)</th>
               </tr>
             </thead>
             <tbody>
               {arrears.map((a, i) => (
                 <tr key={i}>
                   <td className="px-3 py-1" style={{ border: '1px solid #D6DDE2' }}>{a.school_year}</td>
-                  <td className="px-3 py-1 text-right" style={{ border: '1px solid #D6DDE2', fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(a.total_fees)}</td>
-                  <td className="px-3 py-1 text-right" style={{ border: '1px solid #D6DDE2', fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(a.total_paid)}</td>
-                  <td className="px-3 py-1 text-right font-bold" style={{ border: '1px solid #D6DDE2', fontFamily: "'JetBrains Mono', monospace", color: '#C0504D' }}>{formatCurrency(a.balance)}</td>
+                  <td className="px-3 py-1 text-right font-bold" style={{ border: '1px solid #D6DDE2', fontFamily: "'JetBrains Mono', monospace", color: '#C0504D' }}>{formatCurrency(a.total_fees)}</td>
                 </tr>
               ))}
               <tr style={{ backgroundColor: '#E8EDF0' }} className="font-bold">
-                <td className="px-3 py-1.5" colSpan={3} style={{ border: '1px solid #D6DDE2' }}>TOTAL ARREARS</td>
+                <td className="px-3 py-1.5" style={{ border: '1px solid #D6DDE2' }}>TOTAL ARREARS</td>
                 <td className="px-3 py-1.5 text-right" style={{ border: '1px solid #D6DDE2', fontFamily: "'JetBrains Mono', monospace", color: '#C0504D' }}>{formatCurrency(totals.arrears)}</td>
               </tr>
             </tbody>
@@ -131,10 +127,14 @@ export default function SOADocument({ data }) {
       {/* Summary */}
       <div className="soa-summary-box rounded p-4 mb-6" style={{ border: '2px solid #2C5F6E', backgroundColor: '#F4F6F8' }}>
         <div className="grid grid-cols-2 gap-2 text-sm" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+          {totals.arrears > 0 && (
+            <>
+              <span className="font-bold" style={{ color: '#C0504D' }}>PRIOR YEAR FEES:</span><span className="text-right" style={{ color: '#C0504D' }}>{formatCurrency(totals.arrears)}</span>
+            </>
+          )}
           <span className="font-bold" style={{ color: '#1E3A44' }}>CURRENT FEES:</span><span className="text-right">{formatCurrency(totals.currentFees || totals.totalFees)}</span>
           {totals.arrears > 0 && (
             <>
-              <span className="font-bold" style={{ color: '#C0504D' }}>ARREARS:</span><span className="text-right" style={{ color: '#C0504D' }}>{formatCurrency(totals.arrears)}</span>
               <span className="font-bold" style={{ color: '#1E3A44' }}>TOTAL OBLIGATIONS:</span><span className="text-right">{formatCurrency(totals.totalObligations)}</span>
             </>
           )}
