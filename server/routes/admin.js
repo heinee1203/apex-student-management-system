@@ -14,6 +14,12 @@ const PROMOTION_MAP = {
   'Grade 5': 'Grade 6',
 };
 
+// Inverse of PROMOTION_MAP — used by the revert endpoint to un-promote
+// students when rolling back an End-of-Year operation.
+const DEMOTION_MAP = Object.fromEntries(
+  Object.entries(PROMOTION_MAP).map(([from, to]) => [to, from])
+);
+
 function nextSchoolYear(sy) {
   if (!sy) return null;
   const parts = sy.split('-').map(Number);
@@ -214,6 +220,142 @@ router.post('/end-school-year', (req, res) => {
       nextSchoolYear: nextSY,
       ...result,
       message: `School year ${currentSchoolYear} ended successfully.`,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/revert-end-school-year
+// Undoes a previously-run End-of-Year rollover for the given schoolYear.
+// Steps (atomic):
+//   1. Confirm the year is currently locked and caller typed CONFIRM
+//   2. Unlock it (remove from school_settings.locked_school_years)
+//   3. Reset school_settings.current_school_year to that year
+//   4. Clear year_end_snapshots for that year
+//   5. If revertStudents is true (default): for every student who was
+//      affected by the EOY run — status ∈ ('Not Enrolled', 'Graduated')
+//      AND has obligations in schoolYear — set status back to 'Enrolled'
+//      and demote grade_level by one via DEMOTION_MAP (Graduated students
+//      keep their grade since EOY didn't promote them).
+//   6. Write an END_OF_SCHOOL_YEAR_REVERTED audit entry with the per-
+//      student change list so the operation can be inspected later.
+//
+// This endpoint is idempotent in the sense that re-calling it for a year
+// that's already unlocked will just short-circuit and return a no-op.
+router.post('/revert-end-school-year', (req, res) => {
+  try {
+    const { schoolYear, confirm, revertStudents = true } = req.body || {};
+    if (!schoolYear) return res.status(400).json({ error: 'schoolYear is required' });
+    if (confirm !== 'CONFIRM') return res.status(400).json({ error: 'You must type CONFIRM to proceed' });
+
+    const lockedRow = db.prepare("SELECT value FROM school_settings WHERE key = 'locked_school_years'").get();
+    let locked = [];
+    try { locked = lockedRow ? JSON.parse(lockedRow.value) : []; } catch { locked = []; }
+    if (!locked.includes(schoolYear)) {
+      return res.status(400).json({
+        error: `School year ${schoolYear} is not locked. Nothing to revert.`,
+        currentLocked: locked,
+      });
+    }
+
+    const performedBy = req.user?.username || 'unknown';
+    const changedStudents = [];
+
+    const result = db.transaction(() => {
+      // 1) Reset current_school_year
+      setSchoolSetting('current_school_year', schoolYear);
+
+      // 2) Unlock the year
+      const newLocked = locked.filter(sy => sy !== schoolYear);
+      setSchoolSetting('locked_school_years', JSON.stringify(newLocked));
+
+      // 3) Clear year_end_snapshots for this year (they were written by the
+      //    EOY run we're reversing; the data will be re-snapshot if EOY is
+      //    re-run later)
+      const snapshotResult = db.prepare(
+        `DELETE FROM year_end_snapshots WHERE school_year = ?`
+      ).run(schoolYear);
+
+      // 4) Restore student statuses
+      let restoredPromoted = 0;
+      let restoredGraduated = 0;
+      if (revertStudents) {
+        // Candidates: students who have obligations in schoolYear AND are
+        // currently in a status EOY would have set them to. We include
+        // 'Graduated' for students that were Grade 6 during the EOY run.
+        const candidates = db.prepare(`
+          SELECT s.student_id, s.first_name, s.last_name, s.grade_level, s.status
+          FROM students s
+          WHERE s.status IN ('Not Enrolled', 'Graduated')
+            AND EXISTS (
+              SELECT 1 FROM obligations o
+              WHERE o.student_id = s.student_id AND o.school_year = ?
+            )
+        `).all(schoolYear);
+
+        const updateStmt = db.prepare(
+          `UPDATE students SET status = ?, grade_level = ?, updated_at = datetime('now','localtime')
+           WHERE student_id = ?`
+        );
+
+        for (const s of candidates) {
+          if (s.status === 'Graduated') {
+            // Grade 6 graduates stay in Grade 6 when restored
+            updateStmt.run('Enrolled', s.grade_level, s.student_id);
+            changedStudents.push({
+              student_id: s.student_id,
+              name: `${s.last_name}, ${s.first_name}`,
+              from: { status: 'Graduated', grade: s.grade_level },
+              to: { status: 'Enrolled', grade: s.grade_level },
+            });
+            restoredGraduated++;
+          } else {
+            // Not Enrolled → demote grade back to what it was pre-EOY
+            const prevGrade = DEMOTION_MAP[s.grade_level] || s.grade_level;
+            updateStmt.run('Enrolled', prevGrade, s.student_id);
+            changedStudents.push({
+              student_id: s.student_id,
+              name: `${s.last_name}, ${s.first_name}`,
+              from: { status: 'Not Enrolled', grade: s.grade_level },
+              to: { status: 'Enrolled', grade: prevGrade },
+            });
+            restoredPromoted++;
+          }
+        }
+      }
+
+      // 5) Audit log entry
+      const auditDetails = {
+        schoolYear,
+        revertStudents,
+        restoredPromoted,
+        restoredGraduated,
+        snapshotsCleared: snapshotResult.changes,
+        unlocked: schoolYear,
+        resetCurrentSY: schoolYear,
+        students: changedStudents,
+      };
+      db.prepare(`
+        INSERT INTO audit_log (action, performed_by, school_year, details)
+        VALUES (?, ?, ?, ?)
+      `).run('END_OF_SCHOOL_YEAR_REVERTED', performedBy, schoolYear, JSON.stringify(auditDetails));
+
+      return {
+        restoredPromoted,
+        restoredGraduated,
+        snapshotsCleared: snapshotResult.changes,
+      };
+    })();
+
+    res.json({
+      success: true,
+      schoolYear,
+      unlocked: true,
+      currentSchoolYear: schoolYear,
+      ...result,
+      students: changedStudents,
+      message: `School year ${schoolYear} has been unlocked and restored.`,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
