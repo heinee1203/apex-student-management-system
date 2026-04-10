@@ -232,57 +232,79 @@ export default function SOADocument({ data }) {
 
       {/* Bottom block — pushed to bottom of page via flex, signatures always sit near page bottom */}
       <div style={{ marginTop: 'auto', pageBreakInside: 'avoid' }}>
-        {/* Summary */}
-        <div
-          className="soa-summary-box rounded"
-          style={{
-            border: '2px solid #2C5F6E',
-            backgroundColor: '#F4F6F8',
-            padding: '10px 18px',
-            margin: '0 auto 10px',
-            width: '66%',
-          }}
-        >
-          <div className="grid grid-cols-2" style={{ gap: '2px 16px', fontSize: '10pt', lineHeight: 1.6, ...mono }}>
-            {totals.arrears > 0 && (
-              <>
-                <span className="font-bold" style={{ color: '#C0504D' }}>PRIOR YEAR FEES:</span>
-                <span className="text-right" style={{ color: '#C0504D' }}>{formatCurrency(totals.arrears)}</span>
-              </>
-            )}
-            <span className="font-bold" style={{ color: '#1E3A44' }}>CURRENT FEES:</span>
-            <span className="text-right">{formatCurrency(totals.currentFees || totals.totalFees)}</span>
-            {totals.arrears > 0 && (
-              <>
-                <span className="font-bold" style={{ color: '#1E3A44' }}>TOTAL OBLIGATIONS:</span>
-                <span className="text-right">{formatCurrency(totals.totalObligations)}</span>
-              </>
-            )}
-            <span className="font-bold" style={{ color: '#1E3A44' }}>TOTAL PAID:</span>
-            <span className="text-right" style={{ color: '#2E8B6A' }}>{formatCurrency(totals.totalPaid)}</span>
-            <span className="font-bold" style={{ color: '#1E3A44' }}>REMAINING BALANCE:</span>
-            <span className="text-right font-bold" style={{ color: '#C0504D', fontSize: '12pt' }}>{formatCurrency(totals.remainingBalance || totals.balance)}</span>
-            <span className="font-bold" style={{ color: '#1E3A44' }}>STATUS:</span>
-            <span className="text-right font-bold" style={{ color: statusColor, fontSize: '12pt' }}>{totals.status}</span>
-          </div>
+        {/* Account Summary — same table style as other sections */}
+        <div className="soa-summary-box" style={{ marginBottom: '6px' }}>
+          <h3 className="font-bold uppercase" style={{ color: '#2C5F6E', fontSize: '10pt', letterSpacing: '0.4px', margin: '0 0 3px' }}>
+            Account Summary
+          </h3>
+          <table className="w-full" style={{ border: '1px solid #D6DDE2', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#2C5F6E', color: 'white' }}>
+                <th style={{ ...th, textAlign: 'left' }}>Description</th>
+                <th style={thR}>Amount (₱)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {totals.arrears > 0 && (
+                <>
+                  <tr style={{ backgroundColor: 'white' }}>
+                    <td style={td}>Prior Year Fees</td>
+                    <td style={{ ...tdR, color: '#C0504D' }}>{formatCurrency(totals.arrears)}</td>
+                  </tr>
+                  <tr style={{ backgroundColor: '#FBFAF9' }}>
+                    <td style={td}>Current Fees</td>
+                    <td style={tdR}>{formatCurrency(totals.currentFees || totals.totalFees)}</td>
+                  </tr>
+                  <tr style={{ backgroundColor: 'white' }}>
+                    <td style={td}>Total Obligations</td>
+                    <td style={tdR}>{formatCurrency(totals.totalObligations)}</td>
+                  </tr>
+                  <tr style={{ backgroundColor: '#FBFAF9' }}>
+                    <td style={td}>Total Paid</td>
+                    <td style={{ ...tdR, color: '#2E8B6A' }}>{formatCurrency(totals.totalPaid)}</td>
+                  </tr>
+                </>
+              )}
+              {totals.arrears <= 0 && (
+                <>
+                  <tr style={{ backgroundColor: 'white' }}>
+                    <td style={td}>Current Fees</td>
+                    <td style={tdR}>{formatCurrency(totals.currentFees || totals.totalFees)}</td>
+                  </tr>
+                  <tr style={{ backgroundColor: '#FBFAF9' }}>
+                    <td style={td}>Total Paid</td>
+                    <td style={{ ...tdR, color: '#2E8B6A' }}>{formatCurrency(totals.totalPaid)}</td>
+                  </tr>
+                </>
+              )}
+              <tr style={{ backgroundColor: '#E8EDF0', fontWeight: 'bold' }}>
+                <td style={td}>REMAINING BALANCE</td>
+                <td style={{ ...tdR, fontWeight: 'bold', color: '#C0504D' }}>{formatCurrency(totals.remainingBalance || totals.balance)}</td>
+              </tr>
+              <tr style={{ backgroundColor: '#E8EDF0', fontWeight: 'bold' }}>
+                <td style={td}>STATUS</td>
+                <td style={{ ...tdR, fontWeight: 'bold', color: statusColor }}>{totals.status}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
         {/* Note */}
-        <p className="italic text-center" style={{ color: '#8A9EA8', fontSize: '8.5pt', marginTop: '8px', marginBottom: '4px' }}>
+        <p className="italic text-center" style={{ color: '#8A9EA8', fontSize: '8.5pt', marginTop: '6px', marginBottom: '3px' }}>
           Note: Please settle remaining balance before the due date to avoid penalties.
         </p>
 
         {/* Signatures — spread with flexbox space-between, wide underscored lines */}
         <div
           className="soa-signatures flex justify-between"
-          style={{ fontSize: '9pt', marginTop: '18px', gap: '40px' }}
+          style={{ fontSize: '9pt', marginTop: '14px', gap: '40px' }}
         >
           <div style={{ flex: 1, textAlign: 'center' }}>
-            <div style={{ borderBottom: '1px solid #1E3A44', width: '220px', paddingTop: '22px', margin: '0 auto 3px' }} />
+            <div style={{ borderBottom: '1px solid #1E3A44', width: '220px', paddingTop: '16px', margin: '0 auto 3px' }} />
             <p style={{ color: '#4B5563', fontWeight: 500 }}>Prepared by</p>
           </div>
           <div style={{ flex: 1, textAlign: 'center' }}>
-            <div style={{ borderBottom: '1px solid #1E3A44', width: '220px', paddingTop: '22px', margin: '0 auto 3px' }} />
+            <div style={{ borderBottom: '1px solid #1E3A44', width: '220px', paddingTop: '16px', margin: '0 auto 3px' }} />
             <p style={{ color: '#4B5563', fontWeight: 500 }}>Registrar: {schoolInfo.registrar_name || '_______________'}</p>
           </div>
         </div>
