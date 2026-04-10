@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { getStudentBalance } = require('../utils/studentBalance');
 
 // GET /api/dashboard/school-years — distinct school years for dropdown
 router.get('/school-years', (req, res) => {
@@ -21,35 +22,50 @@ router.get('/school-years', (req, res) => {
 });
 
 // GET /api/dashboard/stats?school_year=2025-2026
+// All per-student balance logic goes through getStudentBalance() so that the
+// Outstanding KPI sum exactly equals the sum of the Students With Balance list
+// and both apply the same rounding fix (|balance| < 1 → 0).
 router.get('/stats', (req, res) => {
   try {
-    const sy = req.query.school_year;
-    const syFilter = sy ? ' WHERE school_year = ?' : '';
-    const syParams = sy ? [sy] : [];
+    const sy = req.query.school_year || null;
 
     const totalStudents = sy
       ? db.prepare(`SELECT COUNT(*) as count FROM students WHERE status = 'Enrolled' AND school_year = ?`).get(sy).count
       : db.prepare(`SELECT COUNT(*) as count FROM students WHERE status = 'Enrolled'`).get().count;
 
-    const totalFees = db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM obligations${syFilter}`).get(...syParams).total;
-    const totalCollected = db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM payments${syFilter}`).get(...syParams).total;
-    const outstanding = totalFees - totalCollected;
+    // Find every student who has obligations or payments in the filtered year
+    const studentIdRows = sy
+      ? db.prepare(`
+          SELECT DISTINCT student_id FROM (
+            SELECT student_id FROM obligations WHERE school_year = ?
+            UNION
+            SELECT student_id FROM payments WHERE school_year = ?
+          )
+        `).all(sy, sy)
+      : db.prepare(`SELECT student_id FROM students`).all();
+
+    let totalFees = 0;
+    let totalCollected = 0;
+    let outstanding = 0;
+    let fullyPaid = 0;
+    for (const { student_id } of studentIdRows) {
+      const { totalFees: f, totalPaid: p, balance } = getStudentBalance(db, student_id, sy);
+      totalFees += f;
+      totalCollected += p;
+      if (balance > 0) outstanding += balance;
+      if (balance <= 0 && f > 0) fullyPaid++;
+    }
+
     const collectionRate = totalFees > 0 ? ((totalCollected / totalFees) * 100) : 0;
 
-    // Fully paid: any student (any status) whose payments >= obligations for the filter year.
-    // Matches the Outstanding KPI which has no status filter.
-    const sySubFilter = sy ? ' AND o.school_year = ?' : '';
-    const sySubFilterP = sy ? ' AND p.school_year = ?' : '';
-    const fullyPaid = db.prepare(`
-      SELECT COUNT(*) as count FROM (
-        SELECT s.student_id,
-          COALESCE((SELECT SUM(o.amount) FROM obligations o WHERE o.student_id = s.student_id${sySubFilter}), 0) as fees,
-          COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.student_id = s.student_id${sySubFilterP}), 0) as paid
-        FROM students s
-      ) WHERE paid >= fees AND fees > 0
-    `).get(...(sy ? [sy, sy] : [])).count;
-
-    res.json({ totalStudents, totalFees, totalCollected, outstanding, collectionRate: Math.round(collectionRate * 100) / 100, fullyPaid });
+    res.json({
+      totalStudents,
+      totalFees: Math.round(totalFees * 100) / 100,
+      totalCollected: Math.round(totalCollected * 100) / 100,
+      outstanding: Math.round(outstanding * 100) / 100,
+      collectionRate: Math.round(collectionRate * 100) / 100,
+      fullyPaid,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -78,28 +94,25 @@ router.get('/recent-payments', (req, res) => {
 });
 
 // GET /api/dashboard/balance-list?school_year=2025-2026
-// Returns ALL students with balance > 0 regardless of status. The Outstanding
-// KPI is computed from total obligations - total payments with no status filter,
-// so this list must match to stay consistent. Status is returned so the UI can
-// badge Dropped/LOA/etc. students distinctly.
+// Returns all students with balance > 0 using the shared getStudentBalance helper
+// so the sum of balances equals the Outstanding KPI exactly. The rounding fix
+// (|balance| < 1 → 0) prevents -₱0.01 rounding artifacts from showing as balances.
 router.get('/balance-list', (req, res) => {
   try {
-    const sy = req.query.school_year;
-    const sySubFilter = sy ? ' AND o.school_year = ?' : '';
-    const sySubFilterP = sy ? ' AND p.school_year = ?' : '';
+    const sy = req.query.school_year || null;
 
     const students = db.prepare(`
-      SELECT s.student_id, s.first_name, s.last_name, s.grade_level, s.section, s.status,
-        COALESCE((SELECT SUM(o.amount) FROM obligations o WHERE o.student_id = s.student_id${sySubFilter}), 0) as total_fees,
-        COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.student_id = s.student_id${sySubFilterP}), 0) as total_paid
-      FROM students s
-      WHERE COALESCE((SELECT SUM(o.amount) FROM obligations o WHERE o.student_id = s.student_id${sySubFilter}), 0) >
-            COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.student_id = s.student_id${sySubFilterP}), 0)
-      ORDER BY (COALESCE((SELECT SUM(o.amount) FROM obligations o WHERE o.student_id = s.student_id${sySubFilter}), 0) -
-                COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.student_id = s.student_id${sySubFilterP}), 0)) DESC
-    `).all(...(sy ? [sy, sy, sy, sy, sy, sy] : []));
+      SELECT student_id, first_name, last_name, grade_level, section, status FROM students
+    `).all();
 
-    const result = students.map(s => ({ ...s, balance: s.total_fees - s.total_paid }));
+    const result = [];
+    for (const s of students) {
+      const { totalFees, totalPaid, balance } = getStudentBalance(db, s.student_id, sy);
+      if (balance > 0) {
+        result.push({ ...s, total_fees: totalFees, total_paid: totalPaid, balance });
+      }
+    }
+    result.sort((a, b) => b.balance - a.balance);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });

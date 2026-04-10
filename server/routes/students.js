@@ -5,6 +5,7 @@ const fs = require('fs');
 const db = require('../db');
 const { generateTuitionObligations } = require('../utils/generateTuition');
 const { enrollStudent } = require('../utils/enrollStudent');
+const { getStudentBalance, getPayStatus } = require('../utils/studentBalance');
 const { requireRole } = require('../middleware/role');
 
 // Multer setup for photo uploads
@@ -57,19 +58,11 @@ router.get('/', (req, res) => {
     sql += ` ORDER BY s.last_name, s.first_name`;
     const students = db.prepare(sql).all(...params);
 
-    const today = new Date().toISOString().split('T')[0];
     const result = students.map(s => {
-      const balance = s.total_fees - s.total_paid;
-      const hasOverdue = db.prepare(
-        `SELECT COUNT(*) as count FROM obligations WHERE student_id = ? AND due_date < ? AND due_date IS NOT NULL`
-      ).get(s.student_id, today).count > 0;
-
-      let payStatus = 'Unpaid';
-      if (s.total_paid >= s.total_fees && s.total_fees > 0) payStatus = 'Paid';
-      else if (s.total_paid > 0) payStatus = 'Partial';
-      if (balance > 0 && hasOverdue) payStatus = 'Overdue';
-
-      return { ...s, balance, pay_status: payStatus };
+      // Use shared helper so list, profile, and dashboard all agree
+      const { totalFees, totalPaid, balance } = getStudentBalance(db, s.student_id);
+      const payStatus = getPayStatus(db, s.student_id, totalFees, totalPaid, balance);
+      return { ...s, total_fees: totalFees, total_paid: totalPaid, balance, pay_status: payStatus };
     });
 
     res.json(result);
@@ -84,19 +77,8 @@ router.get('/:studentId', (req, res) => {
     const student = db.prepare(`SELECT * FROM students WHERE student_id = ?`).get(req.params.studentId);
     if (!student) return res.status(404).json({ error: 'Student not found' });
 
-    const totalFees = db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM obligations WHERE student_id = ?`).get(req.params.studentId).total;
-    const totalPaid = db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE student_id = ?`).get(req.params.studentId).total;
-    const balance = totalFees - totalPaid;
-
-    const today = new Date().toISOString().split('T')[0];
-    const hasOverdue = db.prepare(
-      `SELECT COUNT(*) as count FROM obligations WHERE student_id = ? AND due_date < ? AND due_date IS NOT NULL`
-    ).get(req.params.studentId, today).count > 0;
-
-    let payStatus = 'Unpaid';
-    if (totalPaid >= totalFees && totalFees > 0) payStatus = 'Paid';
-    else if (totalPaid > 0) payStatus = 'Partial';
-    if (balance > 0 && hasOverdue) payStatus = 'Overdue';
+    const { totalFees, totalPaid, balance } = getStudentBalance(db, req.params.studentId);
+    const payStatus = getPayStatus(db, req.params.studentId, totalFees, totalPaid, balance);
 
     res.json({ ...student, total_fees: totalFees, total_paid: totalPaid, balance, pay_status: payStatus });
   } catch (err) {
