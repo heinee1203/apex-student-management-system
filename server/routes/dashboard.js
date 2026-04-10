@@ -36,6 +36,8 @@ router.get('/stats', (req, res) => {
     const outstanding = totalFees - totalCollected;
     const collectionRate = totalFees > 0 ? ((totalCollected / totalFees) * 100) : 0;
 
+    // Fully paid: any student (any status) whose payments >= obligations for the filter year.
+    // Matches the Outstanding KPI which has no status filter.
     const sySubFilter = sy ? ' AND o.school_year = ?' : '';
     const sySubFilterP = sy ? ' AND p.school_year = ?' : '';
     const fullyPaid = db.prepare(`
@@ -43,9 +45,9 @@ router.get('/stats', (req, res) => {
         SELECT s.student_id,
           COALESCE((SELECT SUM(o.amount) FROM obligations o WHERE o.student_id = s.student_id${sySubFilter}), 0) as fees,
           COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.student_id = s.student_id${sySubFilterP}), 0) as paid
-        FROM students s WHERE s.status = 'Enrolled'${sy ? ' AND s.school_year = ?' : ''}
+        FROM students s
       ) WHERE paid >= fees AND fees > 0
-    `).get(...(sy ? [sy, sy, sy] : [])).count;
+    `).get(...(sy ? [sy, sy] : [])).count;
 
     res.json({ totalStudents, totalFees, totalCollected, outstanding, collectionRate: Math.round(collectionRate * 100) / 100, fullyPaid });
   } catch (err) {
@@ -76,24 +78,26 @@ router.get('/recent-payments', (req, res) => {
 });
 
 // GET /api/dashboard/balance-list?school_year=2025-2026
+// Returns ALL students with balance > 0 regardless of status. The Outstanding
+// KPI is computed from total obligations - total payments with no status filter,
+// so this list must match to stay consistent. Status is returned so the UI can
+// badge Dropped/LOA/etc. students distinctly.
 router.get('/balance-list', (req, res) => {
   try {
     const sy = req.query.school_year;
     const sySubFilter = sy ? ' AND o.school_year = ?' : '';
     const sySubFilterP = sy ? ' AND p.school_year = ?' : '';
-    const syStudentFilter = sy ? ' AND s.school_year = ?' : '';
 
     const students = db.prepare(`
-      SELECT s.student_id, s.first_name, s.last_name, s.grade_level, s.section,
+      SELECT s.student_id, s.first_name, s.last_name, s.grade_level, s.section, s.status,
         COALESCE((SELECT SUM(o.amount) FROM obligations o WHERE o.student_id = s.student_id${sySubFilter}), 0) as total_fees,
         COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.student_id = s.student_id${sySubFilterP}), 0) as total_paid
       FROM students s
-      WHERE s.status = 'Enrolled'${syStudentFilter}
-      AND COALESCE((SELECT SUM(o.amount) FROM obligations o WHERE o.student_id = s.student_id${sySubFilter}), 0) >
-          COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.student_id = s.student_id${sySubFilterP}), 0)
+      WHERE COALESCE((SELECT SUM(o.amount) FROM obligations o WHERE o.student_id = s.student_id${sySubFilter}), 0) >
+            COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.student_id = s.student_id${sySubFilterP}), 0)
       ORDER BY (COALESCE((SELECT SUM(o.amount) FROM obligations o WHERE o.student_id = s.student_id${sySubFilter}), 0) -
                 COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.student_id = s.student_id${sySubFilterP}), 0)) DESC
-    `).all(...(sy ? [sy, sy, sy, sy, sy, sy, sy] : []));
+    `).all(...(sy ? [sy, sy, sy, sy, sy, sy] : []));
 
     const result = students.map(s => ({ ...s, balance: s.total_fees - s.total_paid }));
     res.json(result);

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import StatCard from '../components/StatCard';
+import StatusBadge from '../components/StatusBadge';
 import { api } from '../utils/api';
 import { formatCurrency, formatDate } from '../utils/format';
 
@@ -121,6 +122,7 @@ export default function Dashboard({ onMenuClick }) {
                   <tr className="text-xs text-brand-slate border-b border-brand-border bg-brand-light">
                     <th className="px-4 py-2">Student</th>
                     <th className="px-4 py-2">Grade</th>
+                    <th className="px-4 py-2">Status</th>
                     <th className="px-4 py-2 text-right">Balance</th>
                   </tr>
                 </thead>
@@ -131,11 +133,12 @@ export default function Dashboard({ onMenuClick }) {
                         <Link to={`/students/${s.student_id}`} className="text-brand-steel hover:text-brand-teal">{s.last_name}, {s.first_name}</Link>
                       </td>
                       <td className="px-4 py-2 text-brand-navy">{s.grade_level}</td>
+                      <td className="px-4 py-2"><StatusBadge status={s.status} /></td>
                       <td className="px-4 py-2 text-right font-mono text-status-danger">{formatCurrency(s.balance)}</td>
                     </tr>
                   ))}
                   {balanceList.length === 0 && (
-                    <tr><td colSpan={3} className="px-4 py-6 text-center text-brand-slate">All students are fully paid</td></tr>
+                    <tr><td colSpan={4} className="px-4 py-6 text-center text-brand-slate">All students are fully paid</td></tr>
                   )}
                 </tbody>
               </table>
