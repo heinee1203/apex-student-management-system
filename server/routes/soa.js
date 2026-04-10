@@ -6,42 +6,38 @@ function buildSOA(studentId, schoolYear) {
   const student = db.prepare('SELECT * FROM students WHERE student_id = ?').get(studentId);
   if (!student) return null;
 
+  // Obligations: filter to the requested school year (these are fees assessed
+  // for THIS year). Arrears from prior years are shown in their own section.
   let obligationSql = `SELECT * FROM obligations WHERE student_id = ?`;
-  let paymentSql = `SELECT * FROM payments WHERE student_id = ?`;
   const oParams = [studentId];
-  const pParams = [studentId];
-
   if (schoolYear) {
     obligationSql += ` AND school_year = ?`;
-    paymentSql += ` AND school_year = ?`;
     oParams.push(schoolYear);
-    pParams.push(schoolYear);
   }
-
   obligationSql += ` ORDER BY due_date ASC`;
-  paymentSql += ` ORDER BY date ASC`;
-
   const obligations = db.prepare(obligationSql).all(...oParams);
-  const payments = db.prepare(paymentSql).all(...pParams);
+
+  // Payments: show ALL payments for the student regardless of school_year label.
+  // A payment is money received from the parent — it reduces the student's total
+  // balance no matter what year it was tagged under. This matches how the Student
+  // Profile calculates balance and fixes the recurring bug where payments and
+  // obligations labeled with different school_years created phantom balances.
+  const payments = db.prepare(
+    `SELECT * FROM payments WHERE student_id = ? ORDER BY date ASC`
+  ).all(studentId);
 
   const totalFees = obligations.reduce((sum, o) => sum + o.amount, 0);
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
 
-  // Global all-years balance check — if the student is globally paid up
-  // (within rounding), there are NO arrears regardless of per-year splits.
-  // This prevents phantom arrears when a payment and its matching obligation
-  // were recorded with different school_year labels.
+  // Arrears (previous school years' unpaid obligations). Prefer year_end_snapshots
+  // if they exist (locked-in values), otherwise fall back to obligations - payments
+  // per prior year. If the student is globally paid up already (payments cover
+  // everything), skip the arrears section entirely.
   const allYearsFees = db.prepare(
     'SELECT COALESCE(SUM(amount), 0) as total FROM obligations WHERE student_id = ?'
   ).get(studentId).total;
-  const allYearsPaid = db.prepare(
-    'SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE student_id = ?'
-  ).get(studentId).total;
-  const globalBalance = allYearsFees - allYearsPaid;
-  const globallyPaidUp = Math.abs(globalBalance) < 1;
+  const globallyPaidUp = totalPaid >= allYearsFees - 1;
 
-  // Calculate arrears from previous school years (prefer snapshots, fallback to calculation).
-  // Skip this entirely if the student is globally paid up.
   let arrears = [];
   let totalArrears = 0;
   if (schoolYear && !globallyPaidUp) {
@@ -89,10 +85,7 @@ function buildSOA(studentId, schoolYear) {
   // Apply rounding fix: balances between -1 and 1 are treated as 0
   const remainingBalance = Math.abs(rawRemaining) < 1 ? 0 : rawRemaining;
 
-  // Status must match what the SOA actually displays (current-year fees +
-  // arrears vs current-year payments). Do NOT use the global all-years check
-  // here — that's only for deciding whether to show the arrears section.
-  // If the numbers on screen show a balance, the status cannot say FULLY PAID.
+  // Status must match the remaining balance shown on the SOA.
   let status;
   if (totalFees === 0 && totalArrears === 0) {
     status = 'NO OUTSTANDING BALANCE';
