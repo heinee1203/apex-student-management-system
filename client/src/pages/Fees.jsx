@@ -85,17 +85,21 @@ export default function Fees({ onMenuClick }) {
       let remaining = paidByStudent[studentId] || 0;
       for (const o of sorted) {
         let payStatus;
+        let paidAmount;
         if (remaining >= o.amount) {
           payStatus = 'Paid';
+          paidAmount = o.amount;
           remaining -= o.amount;
         } else if (remaining > 0) {
           payStatus = 'Partial';
+          paidAmount = remaining; // the actual allocated portion
           remaining = 0;
         } else {
           payStatus = 'Unpaid';
+          paidAmount = 0;
         }
         const overdue = payStatus !== 'Paid' && o.due_date && o.due_date < today;
-        result.push({ ...o, payStatus, effectiveStatus: overdue ? 'Overdue' : payStatus });
+        result.push({ ...o, payStatus, paidAmount, effectiveStatus: overdue ? 'Overdue' : payStatus });
       }
     }
     return result;
@@ -160,17 +164,17 @@ export default function Fees({ onMenuClick }) {
     return sorted;
   }, [obligationsWithStatus, filterGrade, filterFeeType, filterTerm, filterStatus, filterSY, search, sortKey, sortDir]);
 
-  // Summary stats from filtered view
+  // Summary stats from filtered view. Uses the FIFO-allocated paidAmount per
+  // obligation computed above, so partial payments are counted correctly.
+  // When no filter is active, totals match the Dashboard exactly:
+  //   totalPaid = Σ min(student.fees, student.paid) per student
+  //   outstanding = Σ max(0, student.fees - student.paid) per student
   const stats = useMemo(() => {
     const totalFees = filtered.reduce((s, o) => s + (o.amount || 0), 0);
-    // Total paid = sum of amounts for Paid lines + allocated portion of Partial lines
-    // Simpler: count only against obligations in the filtered view
-    let totalPaid = 0;
-    for (const o of filtered) {
-      if (o.payStatus === 'Paid') totalPaid += o.amount;
-      // Partial lines contribute unknown exact amount; use o.amount minus remaining balance share is complex — treat as 0 for now
-    }
-    const outstanding = totalFees - totalPaid;
+    const totalPaid = filtered.reduce((s, o) => s + (o.paidAmount || 0), 0);
+    const rawOutstanding = totalFees - totalPaid;
+    // Rounding fix: |outstanding| < 1 → 0 (matches Dashboard / getStudentBalance)
+    const outstanding = Math.abs(rawOutstanding) < 1 ? 0 : rawOutstanding;
     const overdueCount = filtered.filter(o => o.effectiveStatus === 'Overdue').length;
     return { totalFees, totalPaid, outstanding, overdueCount };
   }, [filtered]);
