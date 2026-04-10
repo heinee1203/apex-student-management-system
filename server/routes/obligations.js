@@ -8,7 +8,7 @@ const { assertCanModifyYear } = require('../utils/schoolYearLock');
 router.get('/', (req, res) => {
   try {
     const { student_id, school_year, payment_term } = req.query;
-    let sql = `SELECT o.*, s.first_name, s.last_name, s.middle_name
+    let sql = `SELECT o.*, s.first_name, s.last_name, s.middle_name, s.grade_level
       FROM obligations o
       JOIN students s ON o.student_id = s.student_id
       WHERE 1=1`;

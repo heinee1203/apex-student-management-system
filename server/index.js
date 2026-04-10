@@ -50,11 +50,30 @@ try {
   db.exec('ALTER TABLE students ADD COLUMN dropped_date TEXT');
 }
 
-// Warn about existing dropped students without dropped_date
+// One-time fix: Cancel all obligations for legacy dropped students with no dropped_date
+// These were dropped before the Drop Student workflow was built, so their obligations
+// were never cancelled. Delete all their current-year obligations and set dropped_date.
 {
-  const droppedNoDate = db.prepare("SELECT COUNT(*) as count FROM students WHERE status = 'Dropped' AND dropped_date IS NULL").get().count;
-  if (droppedNoDate > 0) {
-    console.log(`WARNING: ${droppedNoDate} students have 'Dropped' status but no dropped_date. Their fees have not been adjusted. Set dropped_date manually or re-drop them via the app.`);
+  const legacyDropped = db.prepare(`
+    SELECT student_id, first_name, last_name FROM students
+    WHERE status = 'Dropped' AND dropped_date IS NULL
+  `).all();
+
+  if (legacyDropped.length > 0) {
+    const deleteObs = db.prepare('DELETE FROM obligations WHERE student_id = ? AND school_year = ?');
+    const updateStudent = db.prepare('UPDATE students SET dropped_date = ? WHERE student_id = ?');
+    const currentSY = '2025-2026';
+    const today = new Date().toISOString().split('T')[0];
+
+    const tx = db.transaction(() => {
+      for (const s of legacyDropped) {
+        const deleted = deleteObs.run(s.student_id, currentSY);
+        updateStudent.run(today, s.student_id);
+        console.log(`Fixed legacy dropped student: ${s.first_name} ${s.last_name} — deleted ${deleted.changes} obligations, set dropped_date=${today}`);
+      }
+    });
+    tx();
+    console.log(`Fixed ${legacyDropped.length} legacy dropped student${legacyDropped.length !== 1 ? 's' : ''} with no dropped_date`);
   }
 }
 
