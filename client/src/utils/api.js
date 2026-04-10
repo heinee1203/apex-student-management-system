@@ -114,7 +114,14 @@ export const api = {
     return request(`/reports/by-payment-method${qs ? `?${qs}` : ''}`);
   },
   getReportOverdue: () => request('/reports/overdue'),
-  getReceivables: (sy) => request(`/reports/receivables${sy ? `?school_year=${encodeURIComponent(sy)}` : ''}`),
+  getReceivables: () => request('/reports/receivables'),
+  getEnrollmentSummary: () => request('/reports/enrollment-summary'),
+  getCollectionsDaily: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/reports/collections-daily${qs ? `?${qs}` : ''}`);
+  },
+  getPaymentTermDistribution: (sy) => request(`/reports/payment-term-distribution${sy ? `?school_year=${encodeURIComponent(sy)}` : ''}`),
+  getAgingReport: () => request('/reports/aging'),
 
   // Settings
   getSettings: () => request('/settings'),
