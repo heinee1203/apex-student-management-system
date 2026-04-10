@@ -89,11 +89,20 @@ function buildSOA(studentId, schoolYear) {
   // Apply rounding fix: balances between -1 and 1 are treated as 0
   const remainingBalance = Math.abs(rawRemaining) < 1 ? 0 : rawRemaining;
 
-  let status = 'UNPAID';
-  if (totalFees === 0 && totalArrears === 0) status = 'NO OUTSTANDING BALANCE';
-  else if (globallyPaidUp || (remainingBalance <= 0 && totalObligations > 0)) status = 'FULLY PAID';
-  else if (totalPaid > 0 && remainingBalance > 0) status = 'PARTIAL';
-  else if (totalPaid === 0 && totalObligations > 0) status = 'UNPAID';
+  // Status must match what the SOA actually displays (current-year fees +
+  // arrears vs current-year payments). Do NOT use the global all-years check
+  // here — that's only for deciding whether to show the arrears section.
+  // If the numbers on screen show a balance, the status cannot say FULLY PAID.
+  let status;
+  if (totalFees === 0 && totalArrears === 0) {
+    status = 'NO OUTSTANDING BALANCE';
+  } else if (remainingBalance <= 0) {
+    status = 'FULLY PAID';
+  } else if (totalPaid > 0) {
+    status = 'PARTIAL';
+  } else {
+    status = 'UNPAID';
+  }
 
   const settings = db.prepare('SELECT key, value FROM school_settings').all();
   const schoolInfo = {};
