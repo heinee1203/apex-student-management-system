@@ -23,7 +23,7 @@ th { text-align: left; }
 @media print {
   @page { size: letter portrait; margin: 0.35in; }
 
-  html, body {
+  html, body, #root {
     width: 100%;
     height: auto !important;
     margin: 0;
@@ -32,7 +32,23 @@ th { text-align: left; }
     background: white !important;
   }
 
-  /* Hide non-print elements */
+  /* Release the fixed-height flex app shell so full content prints.
+     The app layout uses `flex h-screen overflow-hidden` with an inner
+     `overflow-y-auto` main area — without these overrides, print
+     captures only what's currently in the scroll viewport. */
+  .flex.h-screen,
+  .flex.h-screen.overflow-hidden,
+  main.overflow-y-auto,
+  main {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  /* Hide chrome — sidebar, topbar, non-print buttons */
+  aside,
   .no-print { display: none !important; }
 
   /* SOA document — fit one page */
@@ -66,6 +82,17 @@ th { text-align: left; }
   .soa-summary-box,
   .soa-signatures { break-inside: avoid; }
   .soa-document table tr { break-inside: avoid; }
+
+  /* Reports page — each card should stay together if possible */
+  .report-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    box-shadow: none !important;
+  }
+
+  /* Keep table rows from splitting */
+  table tr { break-inside: avoid; }
+  thead { display: table-header-group; } /* repeat headers on new pages */
 }
 
 .print-only { display: none; }

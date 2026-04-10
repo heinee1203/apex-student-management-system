@@ -25,10 +25,10 @@ function exportCSV(filename, headers, rows) {
 
 const rateColor = r => r >= 80 ? 'text-status-success' : r >= 50 ? 'text-status-warning' : 'text-status-danger';
 
-// Compact "Export CSV" button used on each card header
+// Compact "Export CSV" button used on each card header — hidden on print
 function ExportBtn({ onClick }) {
   return (
-    <button onClick={onClick} className="text-xs bg-white border border-brand-border hover:bg-brand-light text-brand-navy px-2 py-1 rounded">Export CSV</button>
+    <button onClick={onClick} className="no-print text-xs bg-white border border-brand-border hover:bg-brand-light text-brand-navy px-2 py-1 rounded">Export CSV</button>
   );
 }
 
@@ -79,7 +79,7 @@ export default function Reports({ onMenuClick }) {
       </TopBar>
       <div className="p-6 space-y-6">
         {/* Enrollment Summary */}
-        <div className="bg-white border border-brand-border rounded-xl overflow-hidden shadow-sm">
+        <div className="report-card bg-white border border-brand-border rounded-xl overflow-hidden shadow-sm">
           <div className="px-5 py-3 border-b border-brand-border flex items-center justify-between">
             <h3 className="text-sm font-semibold text-brand-teal">Enrollment Summary</h3>
             <ExportBtn onClick={() => exportCSV(
@@ -119,7 +119,7 @@ export default function Reports({ onMenuClick }) {
         </div>
 
         {/* Collection by Grade Level */}
-        <div className="bg-white border border-brand-border rounded-xl overflow-hidden shadow-sm">
+        <div className="report-card bg-white border border-brand-border rounded-xl overflow-hidden shadow-sm">
           <div className="px-5 py-3 border-b border-brand-border flex items-center justify-between">
             <h3 className="text-sm font-semibold text-brand-teal">Collection by Grade Level</h3>
             <ExportBtn onClick={() => exportCSV(
@@ -155,7 +155,7 @@ export default function Reports({ onMenuClick }) {
         </div>
 
         {/* Payment Term Distribution */}
-        <div className="bg-white border border-brand-border rounded-xl overflow-hidden shadow-sm">
+        <div className="report-card bg-white border border-brand-border rounded-xl overflow-hidden shadow-sm">
           <div className="px-5 py-3 border-b border-brand-border flex items-center justify-between">
             <h3 className="text-sm font-semibold text-brand-teal">Payment Term Distribution</h3>
             <ExportBtn onClick={() => exportCSV(
@@ -192,7 +192,7 @@ export default function Reports({ onMenuClick }) {
         </div>
 
         {/* Payments by Method */}
-        <div className="bg-white border border-brand-border rounded-xl overflow-hidden shadow-sm">
+        <div className="report-card bg-white border border-brand-border rounded-xl overflow-hidden shadow-sm">
           <div className="px-5 py-3 border-b border-brand-border flex items-center justify-between">
             <h3 className="text-sm font-semibold text-brand-teal">Payments by Method</h3>
             <ExportBtn onClick={() => exportCSV(
@@ -227,17 +227,18 @@ export default function Reports({ onMenuClick }) {
         </div>
 
         {/* Daily Collections */}
-        <div className="bg-white border border-brand-border rounded-xl overflow-hidden shadow-sm">
+        <div className="report-card bg-white border border-brand-border rounded-xl overflow-hidden shadow-sm">
           <div className="px-5 py-3 border-b border-brand-border flex items-center justify-between gap-3">
             <h3 className="text-sm font-semibold text-brand-teal">Daily Collections</h3>
             <div className="flex items-center gap-2">
-              <label className="text-xs text-brand-slate">Month:</label>
+              <label className="no-print text-xs text-brand-slate">Month:</label>
               <input
                 type="month"
                 value={collectionsMonth}
                 onChange={e => setCollectionsMonth(e.target.value)}
-                className="bg-white border border-brand-border rounded-lg px-2 py-1 text-xs text-brand-navy focus:outline-none focus:border-brand-steel"
+                className="no-print bg-white border border-brand-border rounded-lg px-2 py-1 text-xs text-brand-navy focus:outline-none focus:border-brand-steel"
               />
+              <span className="hidden print:inline text-xs text-brand-slate" style={{ display: 'none' }}>{collectionsMonth}</span>
               <ExportBtn onClick={() => exportCSV(
                 `collections_${collectionsMonth}.csv`,
                 ['Date', 'Payments', 'Total'],
@@ -276,7 +277,7 @@ export default function Reports({ onMenuClick }) {
         </div>
 
         {/* Aging Report */}
-        <div className="bg-white border border-brand-border rounded-xl overflow-hidden shadow-sm">
+        <div className="report-card bg-white border border-brand-border rounded-xl overflow-hidden shadow-sm">
           <div className="px-5 py-3 border-b border-brand-border flex items-center justify-between">
             <h3 className="text-sm font-semibold text-brand-teal">Accounts Receivable Aging</h3>
             <ExportBtn onClick={() => exportCSV(
@@ -332,7 +333,7 @@ export default function Reports({ onMenuClick }) {
         </div>
 
         {/* Overdue Accounts */}
-        <div className="bg-white border border-brand-border rounded-xl overflow-hidden shadow-sm">
+        <div className="report-card bg-white border border-brand-border rounded-xl overflow-hidden shadow-sm">
           <div className="px-5 py-3 border-b border-brand-border flex items-center justify-between">
             <h3 className="text-sm font-semibold text-brand-teal">Overdue Accounts</h3>
             <ExportBtn onClick={() => exportCSV(
@@ -367,7 +368,7 @@ export default function Reports({ onMenuClick }) {
         </div>
 
         {/* Year-End Receivables — now uses shared helper, no school_year filter */}
-        <div className="bg-white border border-brand-border rounded-xl overflow-hidden shadow-sm">
+        <div className="report-card bg-white border border-brand-border rounded-xl overflow-hidden shadow-sm">
           <div className="px-5 py-3 border-b border-brand-border flex items-center justify-between gap-3">
             <h3 className="text-sm font-semibold text-brand-teal">Year-End Receivables</h3>
             <ExportBtn onClick={() => exportCSV(
