@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { getStudentBalance } = require('../utils/studentBalance');
+const { getStudentBalance, getStudentsWithBalance } = require('../utils/studentBalance');
 
 // GET /api/dashboard/school-years — distinct school years for dropdown
 router.get('/school-years', (req, res) => {
@@ -98,25 +98,12 @@ router.get('/recent-payments', (req, res) => {
 });
 
 // GET /api/dashboard/balance-list
-// Returns students with TOTAL balance > 0 across all years. This matches the
-// Student Profile's balance calculation exactly. The school_year query param
-// is accepted but IGNORED for balance math — see /stats comment above for
-// why cross-year filtering creates phantom balances.
+// Returns students with TOTAL balance > 0 across all years via the shared
+// helper — same data the End of Year preview and SOA /batch use, so all
+// three views always agree on who owes money.
 router.get('/balance-list', (req, res) => {
   try {
-    const students = db.prepare(`
-      SELECT student_id, first_name, last_name, grade_level, section, status FROM students
-    `).all();
-
-    const result = [];
-    for (const s of students) {
-      const { totalFees, totalPaid, balance } = getStudentBalance(db, s.student_id); // no year — all years
-      if (balance > 0) {
-        result.push({ ...s, total_fees: totalFees, total_paid: totalPaid, balance });
-      }
-    }
-    result.sort((a, b) => b.balance - a.balance);
-    res.json(result);
+    res.json(getStudentsWithBalance(db));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

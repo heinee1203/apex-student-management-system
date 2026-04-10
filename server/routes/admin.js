@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { getStudentBalance, getStudentsWithBalance } = require('../utils/studentBalance');
 
 const PROMOTION_MAP = {
   'Nursery 1': 'Nursery 2',
@@ -39,12 +40,6 @@ function setSchoolSetting(key, value) {
               ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(key, value);
 }
 
-function computeArrearsForStudent(studentId, schoolYear) {
-  const fees = db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM obligations WHERE student_id = ? AND school_year = ?`).get(studentId, schoolYear).total;
-  const paid = db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE student_id = ? AND school_year = ?`).get(studentId, schoolYear).total;
-  return { totalFees: fees, totalPaid: paid, balance: fees - paid };
-}
-
 // POST /api/admin/end-school-year-preview
 router.post('/end-school-year-preview', (req, res) => {
   try {
@@ -60,30 +55,16 @@ router.post('/end-school-year-preview', (req, res) => {
     const graduating = enrolled.filter(s => s.grade_level === 'Grade 6').length;
     const promoting = enrolled.length - graduating;
 
-    // Find all students with obligations in current year and compute their balance
-    const studentsWithObligations = db.prepare(`
-      SELECT DISTINCT s.student_id, s.first_name, s.last_name, s.grade_level
-      FROM students s
-      INNER JOIN obligations o ON o.student_id = s.student_id
-      WHERE o.school_year = ?
-      ORDER BY s.last_name, s.first_name
-    `).all(currentSchoolYear);
-
-    const arrearsStudents = [];
-    let arrearsTotal = 0;
-    for (const s of studentsWithObligations) {
-      const { balance } = computeArrearsForStudent(s.student_id, currentSchoolYear);
-      if (balance > 0) {
-        arrearsStudents.push({
-          student_id: s.student_id,
-          name: `${s.last_name}, ${s.first_name}`,
-          grade_level: s.grade_level,
-          balance,
-        });
-        arrearsTotal += balance;
-      }
-    }
-    arrearsStudents.sort((a, b) => b.balance - a.balance);
+    // Use the shared helper so this matches Dashboard, SOA /batch, and the
+    // end-of-year snapshot exactly (global balance, no status or year filter).
+    const withBalance = getStudentsWithBalance(db);
+    const arrearsStudents = withBalance.map(s => ({
+      student_id: s.student_id,
+      name: `${s.last_name}, ${s.first_name}`,
+      grade_level: s.grade_level,
+      balance: s.balance,
+    }));
+    const arrearsTotal = withBalance.reduce((sum, s) => sum + s.balance, 0);
 
     const nextYearTuitionExists = !!db.prepare(`SELECT 1 FROM tuition_schedule WHERE school_year = ? LIMIT 1`).get(nextSY);
 
@@ -122,11 +103,9 @@ router.post('/end-school-year', (req, res) => {
     const snapshotDate = new Date().toISOString().slice(0, 10);
 
     const result = db.transaction(() => {
-      // 1. Snapshot arrears for every student with obligations in current year
-      const withObligations = db.prepare(`
-        SELECT DISTINCT student_id FROM obligations WHERE school_year = ?
-      `).all(currentSchoolYear);
-
+      // 1. Snapshot arrears using the same global-balance definition as the
+      // Dashboard and SOA. Includes every student who currently owes money
+      // regardless of which school_year their obligations are labeled with.
       const snapshotStmt = db.prepare(`
         INSERT INTO year_end_snapshots (student_id, school_year, total_fees, total_paid, arrears_amount, snapshot_date, created_by)
         VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -138,16 +117,21 @@ router.post('/end-school-year', (req, res) => {
           created_by = excluded.created_by
       `);
 
+      const withBalance = getStudentsWithBalance(db);
       let arrearsSnapshotted = 0;
       let arrearsTotal = 0;
-      for (const { student_id } of withObligations) {
-        const { totalFees, totalPaid, balance } = computeArrearsForStudent(student_id, currentSchoolYear);
-        const arrears = Math.max(0, balance);
-        snapshotStmt.run(student_id, currentSchoolYear, totalFees, totalPaid, arrears, snapshotDate, performedBy);
-        if (arrears > 0) {
-          arrearsSnapshotted++;
-          arrearsTotal += arrears;
-        }
+      for (const s of withBalance) {
+        snapshotStmt.run(
+          s.student_id,
+          currentSchoolYear,
+          s.total_fees,
+          s.total_paid,
+          s.balance, // rounding fix already applied by the helper
+          snapshotDate,
+          performedBy,
+        );
+        arrearsSnapshotted++;
+        arrearsTotal += s.balance;
       }
 
       // 2. Process Enrolled students
