@@ -4,7 +4,7 @@ import TopBar from '../components/TopBar';
 import { useToast } from '../components/Toast';
 import { api } from '../utils/api';
 import { formatCurrency } from '../utils/format';
-import { getCurrentSchoolYear, getAvailableSchoolYears } from '../utils/schoolYear';
+import { useSchoolYear } from '../utils/useSchoolYear';
 
 export default function StatementOfAccount({ onMenuClick }) {
   const [searchParams] = useSearchParams();
@@ -13,8 +13,7 @@ export default function StatementOfAccount({ onMenuClick }) {
   const [selectedStudent, setSelectedStudent] = useState(searchParams.get('student') || '');
   const [gradeFilter, setGradeFilter] = useState('all');
   const [showAllStatuses, setShowAllStatuses] = useState(true);
-  const [schoolYear, setSchoolYear] = useState(getCurrentSchoolYear());
-  const schoolYears = useMemo(() => getAvailableSchoolYears(students.map(s => s.school_year)), [students]);
+  const { selectedSY: schoolYear, setSelectedSY: setSchoolYear, availableYears: schoolYears } = useSchoolYear();
   const gradeLevels = ['Nursery 1', 'Nursery 2', 'Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
   const addToast = useToast();
 
@@ -90,7 +89,7 @@ export default function StatementOfAccount({ onMenuClick }) {
             </div>
             <div>
               <label className="block text-xs text-brand-slate mb-1">School Year</label>
-              <select value={schoolYear} onChange={e => setSchoolYear(e.target.value)} className="w-full bg-white border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-navy focus:outline-none focus:border-brand-steel">
+              <select value={schoolYear || ''} onChange={e => setSchoolYear(e.target.value)} className="w-full bg-white border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-navy focus:outline-none focus:border-brand-steel">
                 {schoolYears.map(sy => <option key={sy} value={sy}>{sy}</option>)}
               </select>
             </div>

@@ -5,7 +5,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { api } from '../utils/api';
 import { formatCurrency, formatDate } from '../utils/format';
-import { getCurrentSchoolYear, getAvailableSchoolYears } from '../utils/schoolYear';
+import { useSchoolYear } from '../utils/useSchoolYear';
 import { useAuth } from '../context/AuthContext';
 
 const GRADE_LEVELS = ['Nursery 1', 'Nursery 2', 'Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
@@ -21,7 +21,8 @@ export default function Fees({ onMenuClick }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [form, setForm] = useState({ student_id: '', fee_type: 'Tuition Fee', payment_term: '', installment_number: '', school_year: getCurrentSchoolYear(), amount: '', due_date: '', description: '' });
+  const { selectedSY: currentSY, setSelectedSY: setCurrentSY, availableYears: schoolYears } = useSchoolYear();
+  const [form, setForm] = useState({ student_id: '', fee_type: 'Tuition Fee', payment_term: '', installment_number: '', school_year: '', amount: '', due_date: '', description: '' });
   const [assignTo, setAssignTo] = useState('student');
   const [gradeLevel, setGradeLevel] = useState('');
   const addToast = useToast();
@@ -33,6 +34,9 @@ export default function Fees({ onMenuClick }) {
   const [filterFeeType, setFilterFeeType] = useState('');
   const [filterTerm, setFilterTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  // filterSY is synced with the DB-authoritative current SY on mount via
+  // the effect below. Seeded empty so the first render is "All Years"
+  // until the hook resolves, avoiding a flash of wrong-year data.
   const [filterSY, setFilterSY] = useState('');
   const [search, setSearch] = useState('');
 
@@ -58,6 +62,13 @@ export default function Fees({ onMenuClick }) {
 
   useEffect(() => { load(); }, []);
   useEffect(() => { api.getFeeTypes().then(types => setFeeTypesList(types.map(t => t.name))).catch(console.error); }, []);
+
+  // Sync filterSY to the DB-authoritative current_school_year once the hook
+  // resolves, so the Fees page defaults to the active year (user can still
+  // switch to "All Years" manually).
+  useEffect(() => {
+    if (currentSY && !filterSY) setFilterSY(currentSY);
+  }, [currentSY]);
 
   // Reset page when filters change
   useEffect(() => { setPage(1); }, [filterGrade, filterFeeType, filterTerm, filterStatus, filterSY, search]);
@@ -104,11 +115,6 @@ export default function Fees({ onMenuClick }) {
     }
     return result;
   }, [obligations, payments, today]);
-
-  // Available school years for filter — union of existing data + current + next
-  const schoolYears = useMemo(() => {
-    return getAvailableSchoolYears(obligations.map(o => o.school_year));
-  }, [obligations]);
 
   // Standardized description
   const getDisplayDescription = (o) => {
@@ -300,7 +306,7 @@ export default function Fees({ onMenuClick }) {
     <div>
       <TopBar title="Fees & Obligations" onMenuClick={onMenuClick}>
         <button onClick={exportCSV} className="bg-white border border-brand-border hover:bg-brand-light text-brand-navy px-3 py-1.5 rounded-lg text-sm font-medium">Export CSV</button>
-        {canEdit && <button onClick={() => { setEditing(null); setAssignTo('student'); setGradeLevel(''); setForm({ student_id: '', fee_type: feeTypesList[0] || 'Tuition Fee', payment_term: '', installment_number: '', school_year: getCurrentSchoolYear(), amount: '', due_date: '', description: '' }); setModalOpen(true); }} className="bg-brand-steel hover:bg-brand-teal text-white px-4 py-1.5 rounded-lg text-sm font-medium">+ Add Fee</button>}
+        {canEdit && <button onClick={() => { setEditing(null); setAssignTo('student'); setGradeLevel(''); setForm({ student_id: '', fee_type: feeTypesList[0] || 'Tuition Fee', payment_term: '', installment_number: '', school_year: currentSY || '', amount: '', due_date: '', description: '' }); setModalOpen(true); }} className="bg-brand-steel hover:bg-brand-teal text-white px-4 py-1.5 rounded-lg text-sm font-medium">+ Add Fee</button>}
       </TopBar>
 
       <div className="p-6 space-y-4">

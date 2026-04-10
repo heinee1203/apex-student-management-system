@@ -91,6 +91,9 @@ export const api = {
   deletePayment: (id) => request(`/payments/${id}`, { method: 'DELETE' }),
 
   // Dashboard
+  // Returns { years: string[], current: string }. `current` is the DB's
+  // school_settings.current_school_year — every page should default its
+  // SY dropdown to this value rather than computing from today's date.
   getDashboardSchoolYears: () => request('/dashboard/school-years'),
   getDashboardStats: (sy) => request(`/dashboard/stats${sy ? `?school_year=${sy}` : ''}`),
   getRecentPayments: (limit = 10, sy) => request(`/dashboard/recent-payments?limit=${limit}${sy ? `&school_year=${sy}` : ''}`),

@@ -5,41 +5,34 @@ import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
 import { api } from '../utils/api';
 import { formatCurrency, formatDate } from '../utils/format';
+import { useSchoolYear } from '../utils/useSchoolYear';
 
 export default function Dashboard({ onMenuClick }) {
   const [stats, setStats] = useState(null);
   const [recentPayments, setRecentPayments] = useState([]);
   const [balanceList, setBalanceList] = useState([]);
   const [feeBreakdown, setFeeBreakdown] = useState([]);
-  const [schoolYears, setSchoolYears] = useState([]);
-  const [selectedSY, setSelectedSY] = useState('');
+  const { selectedSY, setSelectedSY, availableYears: schoolYears } = useSchoolYear();
   const [loading, setLoading] = useState(true);
 
-  // Load school years on mount, then auto-select the latest
+  // Load dashboard data whenever selectedSY changes. Wait for the hook
+  // to resolve the DB-authoritative current_school_year before the first
+  // fetch so we don't query with a stale default.
   useEffect(() => {
-    api.getDashboardSchoolYears().then(years => {
-      setSchoolYears(years);
-      if (years.length > 0) setSelectedSY(years[0]); // latest year first
-    }).catch(console.error);
-  }, []);
-
-  // Load dashboard data whenever selectedSY changes
-  useEffect(() => {
-    if (!selectedSY && schoolYears.length > 0) return; // wait for auto-select
+    if (!selectedSY) return;
     setLoading(true);
-    const sy = selectedSY || undefined;
     Promise.all([
-      api.getDashboardStats(sy),
-      api.getRecentPayments(10, sy),
-      api.getBalanceList(sy),
-      api.getFeeBreakdown(sy),
+      api.getDashboardStats(selectedSY),
+      api.getRecentPayments(10, selectedSY),
+      api.getBalanceList(selectedSY),
+      api.getFeeBreakdown(selectedSY),
     ]).then(([s, rp, bl, fb]) => {
       setStats(s);
       setRecentPayments(rp);
       setBalanceList(bl);
       setFeeBreakdown(fb);
     }).catch(console.error).finally(() => setLoading(false));
-  }, [selectedSY, schoolYears]);
+  }, [selectedSY]);
 
   if (loading) return <div className="flex items-center justify-center h-64 text-brand-slate"><svg className="animate-spin h-6 w-6 mr-2" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>Loading...</div>;
 
@@ -52,7 +45,7 @@ export default function Dashboard({ onMenuClick }) {
           <div className="flex items-center gap-3">
             <label className="text-sm font-medium text-brand-slate">School Year</label>
             <select
-              value={selectedSY}
+              value={selectedSY || ''}
               onChange={e => setSelectedSY(e.target.value)}
               className="bg-white border border-brand-border rounded-lg px-3 py-1.5 text-sm text-brand-navy focus:outline-none focus:border-brand-steel"
             >

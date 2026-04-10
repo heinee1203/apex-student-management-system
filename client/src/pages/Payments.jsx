@@ -5,7 +5,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { api } from '../utils/api';
 import { formatCurrency, formatDate } from '../utils/format';
-import { getCurrentSchoolYear, getAvailableSchoolYears } from '../utils/schoolYear';
+import { useSchoolYear } from '../utils/useSchoolYear';
 import { useAuth } from '../context/AuthContext';
 
 const methods = ['Cash', 'GCash', 'Maya', 'Bank Transfer', 'Check', 'Installment Plan'];
@@ -41,17 +41,18 @@ export default function Payments({ onMenuClick }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [form, setForm] = useState({ student_id: '', amount: '', date: '', method: 'Cash', receipt_no: '', school_year: getCurrentSchoolYear(), notes: '' });
+  // School-year context from the DB (authoritative current_school_year)
+  const { selectedSY: filterSY, setSelectedSY: setFilterSY, availableYears: schoolYears } = useSchoolYear();
+  const [form, setForm] = useState({ student_id: '', amount: '', date: '', method: 'Cash', receipt_no: '', school_year: '', notes: '' });
   const addToast = useToast();
   const { hasRole } = useAuth();
   const canEdit = hasRole('Admin', 'Registrar', 'Treasurer');
 
-  // Filters — school year defaults to current
+  // Filters (school year lives in the hook above)
   const [filterGrade, setFilterGrade] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
   const [filterQuarter, setFilterQuarter] = useState('');
   const [filterMethod, setFilterMethod] = useState('');
-  const [filterSY, setFilterSY] = useState(getCurrentSchoolYear());
   const [search, setSearch] = useState('');
 
   // Sorting + pagination
@@ -71,11 +72,6 @@ export default function Payments({ onMenuClick }) {
 
   // Reset page when filters change
   useEffect(() => { setPage(1); }, [filterGrade, filterMonth, filterQuarter, filterMethod, filterSY, search, sortKey, sortDir]);
-
-  // School years for filter — union of existing data + current + next
-  const schoolYears = useMemo(() => {
-    return getAvailableSchoolYears(payments.map(p => p.school_year));
-  }, [payments]);
 
   // Filtered payments
   const filtered = useMemo(() => {
@@ -125,7 +121,7 @@ export default function Payments({ onMenuClick }) {
     return sorted;
   }, [payments, filterGrade, filterMonth, filterQuarter, filterMethod, filterSY, search, sortKey, sortDir]);
 
-  const hasFilters = filterGrade || filterMonth || filterQuarter || filterMethod || filterSY !== getCurrentSchoolYear() || search;
+  const hasFilters = filterGrade || filterMonth || filterQuarter || filterMethod || search;
 
   // Stats from filtered set
   const stats = useMemo(() => {
@@ -150,8 +146,8 @@ export default function Payments({ onMenuClick }) {
     setFilterMonth('');
     setFilterQuarter('');
     setFilterMethod('');
-    setFilterSY(getCurrentSchoolYear());
     setSearch('');
+    // Leave filterSY alone — the DB-authoritative current SY stays selected.
   };
 
   const handleMonthChange = (val) => { setFilterMonth(val); if (val) setFilterQuarter(''); };
@@ -228,7 +224,7 @@ export default function Payments({ onMenuClick }) {
       <TopBar title="Payments" onMenuClick={onMenuClick}>
         <button onClick={() => window.print()} className="bg-white border border-brand-border hover:bg-brand-light text-brand-navy px-3 py-1.5 rounded-lg text-sm font-medium">Print</button>
         <button onClick={exportCSV} className="bg-white border border-brand-border hover:bg-brand-light text-brand-navy px-3 py-1.5 rounded-lg text-sm font-medium">Export CSV</button>
-        {canEdit && <button onClick={() => { setEditing(null); setForm({ student_id: '', amount: '', date: '', method: 'Cash', receipt_no: '', school_year: getCurrentSchoolYear(), notes: '' }); setModalOpen(true); }} className="bg-brand-steel hover:bg-brand-teal text-white px-4 py-1.5 rounded-lg text-sm font-medium">+ Add Payment</button>}
+        {canEdit && <button onClick={() => { setEditing(null); setForm({ student_id: '', amount: '', date: '', method: 'Cash', receipt_no: '', school_year: filterSY || '', notes: '' }); setModalOpen(true); }} className="bg-brand-steel hover:bg-brand-teal text-white px-4 py-1.5 rounded-lg text-sm font-medium">+ Add Payment</button>}
       </TopBar>
 
       <div className="p-6 space-y-4">
@@ -270,7 +266,7 @@ export default function Payments({ onMenuClick }) {
             <option value="">All Methods</option>
             {methods.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
-          <select value={filterSY} onChange={e => setFilterSY(e.target.value)} className={selectClass}>
+          <select value={filterSY || ''} onChange={e => setFilterSY(e.target.value)} className={selectClass}>
             <option value="">All Years</option>
             {schoolYears.map(sy => <option key={sy} value={sy}>{sy}</option>)}
           </select>
@@ -337,7 +333,7 @@ export default function Payments({ onMenuClick }) {
                     <td className="px-4 py-2 text-brand-slate max-w-[200px] truncate" title={p.notes || ''}>{p.notes || '—'}</td>
                     <td className="px-4 py-2">
                       {canEdit && <div className="flex gap-1">
-                        <button onClick={() => { setEditing(p.id); setForm({ student_id: p.student_id, amount: p.amount, date: p.date, method: p.method, receipt_no: p.receipt_no || '', school_year: p.school_year || getCurrentSchoolYear(), notes: p.notes || '' }); setModalOpen(true); }} title="Edit" className="text-brand-slate hover:text-status-warning p-1">
+                        <button onClick={() => { setEditing(p.id); setForm({ student_id: p.student_id, amount: p.amount, date: p.date, method: p.method, receipt_no: p.receipt_no || '', school_year: p.school_year || filterSY || '', notes: p.notes || '' }); setModalOpen(true); }} title="Edit" className="text-brand-slate hover:text-status-warning p-1">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                         </button>
                         <button onClick={() => setDeleteTarget(p.id)} title="Delete" className="text-brand-slate hover:text-status-danger p-1">

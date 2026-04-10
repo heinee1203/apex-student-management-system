@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import TopBar from '../components/TopBar';
 import { api } from '../utils/api';
 import { formatCurrency } from '../utils/format';
-import { getCurrentSchoolYear, getAvailableSchoolYears } from '../utils/schoolYear';
+import { useSchoolYear } from '../utils/useSchoolYear';
 
 // CSV export helper
 function exportCSV(filename, headers, rows) {
@@ -42,8 +42,7 @@ export default function Reports({ onMenuClick }) {
   const [aging, setAging] = useState({ rows: [], totals: { current: 0, d30: 0, d60: 0, d90: 0, d90plus: 0, total: 0 } });
   const [collectionsMonth, setCollectionsMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [collections, setCollections] = useState({ rows: [], total: 0, paymentCount: 0 });
-  const [enrollmentYear, setEnrollmentYear] = useState(getCurrentSchoolYear());
-  const schoolYears = getAvailableSchoolYears();
+  const { selectedSY: enrollmentYear, setSelectedSY: setEnrollmentYear, availableYears: schoolYears } = useSchoolYear();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -52,15 +51,13 @@ export default function Reports({ onMenuClick }) {
       api.getReportByPaymentMethod(),
       api.getReportOverdue(),
       api.getReceivables(),
-      api.getEnrollmentSummary(enrollmentYear),
       api.getPaymentTermDistribution(),
       api.getAgingReport(),
-    ]).then(([g, m, o, r, en, tdist, a]) => {
+    ]).then(([g, m, o, r, tdist, a]) => {
       setGradeReport(g);
       setMethodReport(m);
       setOverdueReport(o);
       setReceivables(r);
-      setEnrollment(en);
       setTermDist(tdist);
       setAging(a);
     }).catch(console.error).finally(() => setLoading(false));
@@ -72,8 +69,11 @@ export default function Reports({ onMenuClick }) {
       .catch(console.error);
   }, [collectionsMonth]);
 
-  // Re-fetch enrollment summary when the selected school year changes
+  // Re-fetch enrollment summary whenever the selected school year changes.
+  // Waits for the hook to supply the DB-authoritative current SY before
+  // making the first request so it doesn't fire with a stale default.
   useEffect(() => {
+    if (!enrollmentYear) return;
     api.getEnrollmentSummary(enrollmentYear)
       .then(setEnrollment)
       .catch(console.error);
@@ -94,7 +94,7 @@ export default function Reports({ onMenuClick }) {
             <div className="flex items-center gap-2">
               <label className="no-print text-xs text-brand-slate">School Year:</label>
               <select
-                value={enrollmentYear}
+                value={enrollmentYear || ''}
                 onChange={e => setEnrollmentYear(e.target.value)}
                 className="no-print bg-white border border-brand-border rounded-lg px-2 py-1 text-xs text-brand-navy font-mono focus:outline-none focus:border-brand-steel"
               >

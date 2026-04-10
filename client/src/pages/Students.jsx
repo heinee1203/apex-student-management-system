@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import Modal from '../components/Modal';
@@ -8,7 +8,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { api } from '../utils/api';
 import { formatCurrency } from '../utils/format';
-import { getCurrentSchoolYear, getAvailableSchoolYears } from '../utils/schoolYear';
+import { useSchoolYear } from '../utils/useSchoolYear';
 import { useAuth } from '../context/AuthContext';
 
 const gradeLevels = ['Nursery 1', 'Nursery 2', 'Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
@@ -17,7 +17,7 @@ const payStatuses = ['Paid', 'Partial', 'Unpaid', 'Overdue'];
 const statuses = ['Registered', 'Enrolled', 'Not Enrolled', 'Dropped', 'LOA', 'Graduated'];
 const editStatuses = ['Registered', 'Enrolled', 'Not Enrolled', 'LOA', 'Graduated'];
 
-const emptyForm = { student_id: '', first_name: '', middle_name: '', last_name: '', grade_level: 'Nursery 1', section: '', lrn: '', birth_date: '', gender: '', status: 'Registered', email: '', phone: '', parent_name: '', guardian: '', guardian_phone: '', date_enrolled: '', address: '', payment_term: 'Monthly', total_tuition: '', school_year: getCurrentSchoolYear() };
+const emptyForm = { student_id: '', first_name: '', middle_name: '', last_name: '', grade_level: 'Nursery 1', section: '', lrn: '', birth_date: '', gender: '', status: 'Registered', email: '', phone: '', parent_name: '', guardian: '', guardian_phone: '', date_enrolled: '', address: '', payment_term: 'Monthly', total_tuition: '', school_year: '' };
 
 export default function Students({ onMenuClick }) {
   const [students, setStudents] = useState([]);
@@ -25,9 +25,10 @@ export default function Students({ onMenuClick }) {
   const [filterGrade, setFilterGrade] = useState('');
   const [filterTerm, setFilterTerm] = useState('');
   const [filterPayStatus, setFilterPayStatus] = useState('');
-  const [schoolYear, setSchoolYear] = useState(getCurrentSchoolYear());
-  const [allYears, setAllYears] = useState([]);
-  const schoolYears = useMemo(() => getAvailableSchoolYears(allYears), [allYears]);
+  // SY context from the backend hook — defaults to the DB's
+  // authoritative current_school_year. List fetches are gated on
+  // !schoolYear so we don't issue a query with a stale default.
+  const { selectedSY: schoolYear, setSelectedSY: setSchoolYear, availableYears: schoolYears } = useSchoolYear();
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -44,6 +45,7 @@ export default function Students({ onMenuClick }) {
   const canEdit = hasRole('Admin', 'Registrar', 'Treasurer');
 
   const load = () => {
+    if (!schoolYear) return; // wait for backend-provided current SY
     setLoading(true);
     const params = { school_year: schoolYear };
     if (search) params.search = search;
@@ -51,12 +53,6 @@ export default function Students({ onMenuClick }) {
   };
 
   useEffect(() => { load(); }, [search, schoolYear]);
-
-  // Populate the school-year dropdown from the same union endpoint used by
-  // Dashboard/Fees/Payments so the available years are always consistent.
-  useEffect(() => {
-    api.getDashboardSchoolYears().then(setAllYears).catch(() => {});
-  }, []);
 
   // Auto-fill total_tuition from tuition schedule based on payment term
   useEffect(() => {
@@ -83,10 +79,10 @@ export default function Students({ onMenuClick }) {
       .catch(() => {});
   }, [modalOpen, form.grade_level, form.school_year, form.payment_term]);
 
-  const openAdd = () => { setEditing(null); setForm(emptyForm); setTuitionWarning(''); setModalOpen(true); };
+  const openAdd = () => { setEditing(null); setForm({ ...emptyForm, school_year: schoolYear || '' }); setTuitionWarning(''); setModalOpen(true); };
   const openEdit = (s) => {
     setEditing(s.student_id);
-    setForm({ student_id: s.student_id, first_name: s.first_name, middle_name: s.middle_name || '', last_name: s.last_name, grade_level: s.grade_level, section: s.section || '', lrn: s.lrn || '', birth_date: s.birth_date || '', gender: s.gender || '', status: s.status, email: s.email || '', phone: s.phone || '', parent_name: s.parent_name || '', guardian: s.guardian || '', guardian_phone: s.guardian_phone || '', date_enrolled: s.date_enrolled || '', address: s.address || '', payment_term: s.payment_term || 'Monthly', total_tuition: s.total_tuition || '', school_year: s.school_year || getCurrentSchoolYear() });
+    setForm({ student_id: s.student_id, first_name: s.first_name, middle_name: s.middle_name || '', last_name: s.last_name, grade_level: s.grade_level, section: s.section || '', lrn: s.lrn || '', birth_date: s.birth_date || '', gender: s.gender || '', status: s.status, email: s.email || '', phone: s.phone || '', parent_name: s.parent_name || '', guardian: s.guardian || '', guardian_phone: s.guardian_phone || '', date_enrolled: s.date_enrolled || '', address: s.address || '', payment_term: s.payment_term || 'Monthly', total_tuition: s.total_tuition || '', school_year: s.school_year || schoolYear || '' });
     setModalOpen(true);
   };
 
@@ -186,7 +182,7 @@ export default function Students({ onMenuClick }) {
             </button>
           )}
         </div>
-        <select value={schoolYear} onChange={e => setSchoolYear(e.target.value)} className="bg-white border border-brand-border rounded-lg px-2 py-1.5 text-sm text-brand-navy focus:outline-none focus:border-brand-steel" title="School Year">
+        <select value={schoolYear || ''} onChange={e => setSchoolYear(e.target.value)} className="bg-white border border-brand-border rounded-lg px-2 py-1.5 text-sm text-brand-navy focus:outline-none focus:border-brand-steel" title="School Year">
           {schoolYears.map(sy => <option key={sy} value={sy}>{sy}</option>)}
         </select>
         <select value={filterGrade} onChange={e => setFilterGrade(e.target.value)} className="bg-white border border-brand-border rounded-lg px-2 py-1.5 text-sm text-brand-navy focus:outline-none focus:border-brand-steel">
