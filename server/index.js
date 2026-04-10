@@ -77,6 +77,41 @@ try {
   }
 }
 
+// One-time fix: Create settlement obligations for dropped students with payments but no fees.
+// After the legacy dropped students migration deleted their obligations, their payments
+// still remained, creating negative balances. The correct state is balance = 0, meaning
+// total fees = amount paid. Create a single "Settlement — Partial Tuition (Dropped)"
+// obligation matching their total payments.
+{
+  const droppedWithPaymentsNoFees = db.prepare(`
+    SELECT s.student_id, s.first_name, s.last_name, s.school_year,
+      COALESCE((SELECT SUM(amount) FROM payments WHERE student_id = s.student_id), 0) as total_paid,
+      COALESCE((SELECT SUM(amount) FROM obligations WHERE student_id = s.student_id), 0) as total_fees
+    FROM students s
+    WHERE s.status = 'Dropped'
+      AND COALESCE((SELECT SUM(amount) FROM obligations WHERE student_id = s.student_id), 0) = 0
+      AND COALESCE((SELECT SUM(amount) FROM payments WHERE student_id = s.student_id), 0) > 0
+  `).all();
+
+  if (droppedWithPaymentsNoFees.length > 0) {
+    const insertOb = db.prepare(`
+      INSERT INTO obligations (id, student_id, fee_type, description, payment_term, school_year, amount, due_date)
+      VALUES (lower(hex(randomblob(16))), ?, 'Tuition Fee', 'Settlement — Partial Tuition (Dropped)', 'One-time', ?, ?, ?)
+    `);
+
+    const tx = db.transaction(() => {
+      for (const s of droppedWithPaymentsNoFees) {
+        const sy = s.school_year || '2025-2026';
+        const today = new Date().toISOString().split('T')[0];
+        insertOb.run(s.student_id, sy, s.total_paid, today);
+        console.log(`Created settlement obligation for dropped student ${s.first_name} ${s.last_name}: ₱${s.total_paid}`);
+      }
+    });
+    tx();
+    console.log(`Fixed ${droppedWithPaymentsNoFees.length} dropped student${droppedWithPaymentsNoFees.length !== 1 ? 's' : ''} — fees now match payments`);
+  }
+}
+
 // Migrate: create year_end_snapshots and audit_log tables if missing
 try { db.prepare('SELECT id FROM year_end_snapshots LIMIT 1').get(); }
 catch {
