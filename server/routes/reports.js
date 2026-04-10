@@ -105,9 +105,40 @@ router.get('/receivables', (req, res) => {
   }
 });
 
-// GET /api/reports/enrollment-summary — student count by grade and status
+// GET /api/reports/enrollment-summary?school_year=2025-2026
+// Student count by grade and status FOR THE SELECTED SCHOOL YEAR.
+//
+// Status is counted as follows:
+//   Enrolled / LOA / Registered — student has that status AND
+//     students.school_year matches the filter (i.e. they are associated
+//     with this school year right now)
+//   Dropped — student has status='Dropped' AND their dropped_date falls
+//     within the selected school year's date range (June 1 → May 31).
+//     A student dropped in a prior year must NOT appear as Dropped under
+//     the new year's summary.
+//   Not Enrolled — students whose current status is 'Not Enrolled' AND
+//     their school_year field matches the filter. Students who have
+//     already moved on to a new year don't count here.
+//   Graduated — counted under the school year they graduated in (stored
+//     in students.school_year after end-of-year processing).
+//
+// If no school_year is provided, defaults to current year.
 router.get('/enrollment-summary', (req, res) => {
   try {
+    // Determine school year from query or default
+    let sy = req.query.school_year;
+    if (!sy) {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = now.getMonth() + 1;
+      sy = m >= 6 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
+    }
+
+    // Derive the calendar date range for this school year (June → May)
+    const [startYear] = sy.split('-').map(Number);
+    const syStart = `${startYear}-06-01`;
+    const syEnd = `${startYear + 1}-05-31`;
+
     const grades = ['Nursery 1', 'Nursery 2', 'Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
     const statuses = ['Enrolled', 'Dropped', 'LOA', 'Not Enrolled', 'Registered', 'Graduated'];
 
@@ -115,9 +146,21 @@ router.get('/enrollment-summary', (req, res) => {
       const row = { grade_level: grade };
       let total = 0;
       for (const status of statuses) {
-        const c = db.prepare(
-          `SELECT COUNT(*) as c FROM students WHERE grade_level = ? AND status = ?`
-        ).get(grade, status).c;
+        let c = 0;
+        if (status === 'Dropped') {
+          // Count only students dropped WITHIN this school year's date range
+          c = db.prepare(`
+            SELECT COUNT(*) as c FROM students
+            WHERE grade_level = ? AND status = 'Dropped'
+              AND dropped_date IS NOT NULL
+              AND dropped_date >= ? AND dropped_date <= ?
+          `).get(grade, syStart, syEnd).c;
+        } else {
+          c = db.prepare(`
+            SELECT COUNT(*) as c FROM students
+            WHERE grade_level = ? AND status = ? AND school_year = ?
+          `).get(grade, status, sy).c;
+        }
         row[status] = c;
         total += c;
       }
@@ -132,7 +175,7 @@ router.get('/enrollment-summary', (req, res) => {
       totals.total += totals[status];
     }
 
-    res.json({ rows, totals, statuses });
+    res.json({ rows, totals, statuses, school_year: sy });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -3,19 +3,40 @@ const router = express.Router();
 const db = require('../db');
 const { getStudentBalance, getStudentsWithBalance } = require('../utils/studentBalance');
 
-// GET /api/dashboard/school-years — distinct school years for dropdown
+// GET /api/dashboard/school-years — school years available in dropdowns.
+// Returns the union of: years that have data (obligations/payments/students)
+// AND the current school year AND the next school year (so registrars can
+// pre-configure tuition/fees for the upcoming year starting in April).
 router.get('/school-years', (req, res) => {
   try {
-    const years = db.prepare(`
+    // Compute current SY server-side (PH convention: June start)
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1;
+    const current = m >= 6 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
+    const [ca] = current.split('-').map(Number);
+    const next = `${ca + 1}-${ca + 2}`;
+    const prev = `${ca - 1}-${ca}`;
+
+    const rows = db.prepare(`
       SELECT DISTINCT school_year FROM (
         SELECT school_year FROM obligations
         UNION
         SELECT school_year FROM payments
         UNION
-        SELECT school_year FROM students WHERE status = 'Enrolled'
-      ) ORDER BY school_year DESC
+        SELECT school_year FROM students
+      )
     `).all();
-    res.json(years.map(r => r.school_year).filter(Boolean));
+
+    const set = new Set(rows.map(r => r.school_year).filter(Boolean));
+    set.add(prev);
+    set.add(current);
+    // Next year always shown from April onward, always shown anyway here
+    // since setup can happen any time once the current year is underway.
+    set.add(next);
+
+    const years = [...set].sort().reverse();
+    res.json(years);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

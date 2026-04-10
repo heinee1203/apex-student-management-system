@@ -4,7 +4,7 @@ import TopBar from '../components/TopBar';
 import { useToast } from '../components/Toast';
 import { api } from '../utils/api';
 import { formatCurrency } from '../utils/format';
-import { getCurrentSchoolYear } from '../utils/schoolYear';
+import { getCurrentSchoolYear, getAvailableSchoolYears } from '../utils/schoolYear';
 
 export default function StatementOfAccount({ onMenuClick }) {
   const [searchParams] = useSearchParams();
@@ -13,7 +13,8 @@ export default function StatementOfAccount({ onMenuClick }) {
   const [selectedStudent, setSelectedStudent] = useState(searchParams.get('student') || '');
   const [gradeFilter, setGradeFilter] = useState('all');
   const [showAllStatuses, setShowAllStatuses] = useState(true);
-  const schoolYear = getCurrentSchoolYear();
+  const [schoolYear, setSchoolYear] = useState(getCurrentSchoolYear());
+  const schoolYears = useMemo(() => getAvailableSchoolYears(students.map(s => s.school_year)), [students]);
   const gradeLevels = ['Nursery 1', 'Nursery 2', 'Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
   const addToast = useToast();
 
@@ -87,9 +88,11 @@ export default function StatementOfAccount({ onMenuClick }) {
               </select>
               <p className="text-xs text-brand-slate mt-1">{filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''} in list</p>
             </div>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-brand-slate">School Year:</span>
-              <span className="font-semibold text-brand-navy">{schoolYear}</span>
+            <div>
+              <label className="block text-xs text-brand-slate mb-1">School Year</label>
+              <select value={schoolYear} onChange={e => setSchoolYear(e.target.value)} className="w-full bg-white border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-navy focus:outline-none focus:border-brand-steel">
+                {schoolYears.map(sy => <option key={sy} value={sy}>{sy}</option>)}
+              </select>
             </div>
             <button onClick={generateSOA} className="w-full bg-brand-steel hover:bg-brand-teal text-white py-2.5 rounded-lg text-sm font-medium transition-colors">
               Generate SOA

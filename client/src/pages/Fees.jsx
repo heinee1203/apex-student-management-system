@@ -5,7 +5,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { api } from '../utils/api';
 import { formatCurrency, formatDate } from '../utils/format';
-import { getCurrentSchoolYear } from '../utils/schoolYear';
+import { getCurrentSchoolYear, getAvailableSchoolYears } from '../utils/schoolYear';
 import { useAuth } from '../context/AuthContext';
 
 const GRADE_LEVELS = ['Nursery 1', 'Nursery 2', 'Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
@@ -105,10 +105,9 @@ export default function Fees({ onMenuClick }) {
     return result;
   }, [obligations, payments, today]);
 
-  // Available school years for filter
+  // Available school years for filter — union of existing data + current + next
   const schoolYears = useMemo(() => {
-    const set = new Set(obligations.map(o => o.school_year).filter(Boolean));
-    return [...set].sort().reverse();
+    return getAvailableSchoolYears(obligations.map(o => o.school_year));
   }, [obligations]);
 
   // Standardized description

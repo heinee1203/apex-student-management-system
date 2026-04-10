@@ -115,7 +115,7 @@ export const api = {
   },
   getReportOverdue: () => request('/reports/overdue'),
   getReceivables: () => request('/reports/receivables'),
-  getEnrollmentSummary: () => request('/reports/enrollment-summary'),
+  getEnrollmentSummary: (sy) => request(`/reports/enrollment-summary${sy ? `?school_year=${encodeURIComponent(sy)}` : ''}`),
   getCollectionsDaily: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return request(`/reports/collections-daily${qs ? `?${qs}` : ''}`);

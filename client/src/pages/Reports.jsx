@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import TopBar from '../components/TopBar';
 import { api } from '../utils/api';
 import { formatCurrency } from '../utils/format';
-import { getCurrentSchoolYear } from '../utils/schoolYear';
+import { getCurrentSchoolYear, getAvailableSchoolYears } from '../utils/schoolYear';
 
 // CSV export helper
 function exportCSV(filename, headers, rows) {
@@ -42,6 +42,8 @@ export default function Reports({ onMenuClick }) {
   const [aging, setAging] = useState({ rows: [], totals: { current: 0, d30: 0, d60: 0, d90: 0, d90plus: 0, total: 0 } });
   const [collectionsMonth, setCollectionsMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [collections, setCollections] = useState({ rows: [], total: 0, paymentCount: 0 });
+  const [enrollmentYear, setEnrollmentYear] = useState(getCurrentSchoolYear());
+  const schoolYears = getAvailableSchoolYears();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -50,7 +52,7 @@ export default function Reports({ onMenuClick }) {
       api.getReportByPaymentMethod(),
       api.getReportOverdue(),
       api.getReceivables(),
-      api.getEnrollmentSummary(),
+      api.getEnrollmentSummary(enrollmentYear),
       api.getPaymentTermDistribution(),
       api.getAgingReport(),
     ]).then(([g, m, o, r, en, tdist, a]) => {
@@ -70,6 +72,13 @@ export default function Reports({ onMenuClick }) {
       .catch(console.error);
   }, [collectionsMonth]);
 
+  // Re-fetch enrollment summary when the selected school year changes
+  useEffect(() => {
+    api.getEnrollmentSummary(enrollmentYear)
+      .then(setEnrollment)
+      .catch(console.error);
+  }, [enrollmentYear]);
+
   if (loading) return <div className="flex items-center justify-center h-64 text-brand-slate"><svg className="animate-spin h-6 w-6 mr-2" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" /></svg>Loading...</div>;
 
   return (
@@ -80,14 +89,24 @@ export default function Reports({ onMenuClick }) {
       <div className="p-6 space-y-6">
         {/* Enrollment Summary */}
         <div className="report-card bg-white border border-brand-border rounded-xl overflow-hidden shadow-sm">
-          <div className="px-5 py-3 border-b border-brand-border flex items-center justify-between">
+          <div className="px-5 py-3 border-b border-brand-border flex items-center justify-between gap-3">
             <h3 className="text-sm font-semibold text-brand-teal">Enrollment Summary</h3>
-            <ExportBtn onClick={() => exportCSV(
-              'enrollment_summary.csv',
-              ['Grade Level', ...enrollment.statuses, 'Total'],
-              [...enrollment.rows.map(r => [r.grade_level, ...enrollment.statuses.map(s => r[s]), r.total]),
-               ['TOTAL', ...enrollment.statuses.map(s => enrollment.totals[s]), enrollment.totals.total]]
-            )} />
+            <div className="flex items-center gap-2">
+              <label className="no-print text-xs text-brand-slate">School Year:</label>
+              <select
+                value={enrollmentYear}
+                onChange={e => setEnrollmentYear(e.target.value)}
+                className="no-print bg-white border border-brand-border rounded-lg px-2 py-1 text-xs text-brand-navy font-mono focus:outline-none focus:border-brand-steel"
+              >
+                {schoolYears.map(sy => <option key={sy} value={sy}>{sy}</option>)}
+              </select>
+              <ExportBtn onClick={() => exportCSV(
+                `enrollment_summary_${enrollmentYear}.csv`,
+                ['Grade Level', ...enrollment.statuses, 'Total'],
+                [...enrollment.rows.map(r => [r.grade_level, ...enrollment.statuses.map(s => r[s]), r.total]),
+                 ['TOTAL', ...enrollment.statuses.map(s => enrollment.totals[s]), enrollment.totals.total]]
+              )} />
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

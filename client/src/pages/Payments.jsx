@@ -5,7 +5,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { api } from '../utils/api';
 import { formatCurrency, formatDate } from '../utils/format';
-import { getCurrentSchoolYear } from '../utils/schoolYear';
+import { getCurrentSchoolYear, getAvailableSchoolYears } from '../utils/schoolYear';
 import { useAuth } from '../context/AuthContext';
 
 const methods = ['Cash', 'GCash', 'Maya', 'Bank Transfer', 'Check', 'Installment Plan'];
@@ -72,12 +72,9 @@ export default function Payments({ onMenuClick }) {
   // Reset page when filters change
   useEffect(() => { setPage(1); }, [filterGrade, filterMonth, filterQuarter, filterMethod, filterSY, search, sortKey, sortDir]);
 
-  // Derive unique school years from payments
+  // School years for filter — union of existing data + current + next
   const schoolYears = useMemo(() => {
-    const sySet = new Set(payments.map(p => p.school_year).filter(Boolean));
-    // Make sure the default current year is always an option
-    sySet.add(getCurrentSchoolYear());
-    return [...sySet].sort().reverse();
+    return getAvailableSchoolYears(payments.map(p => p.school_year));
   }, [payments]);
 
   // Filtered payments
