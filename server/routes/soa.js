@@ -1,39 +1,47 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { getStudentBalance, getStudentsWithBalance } = require('../utils/studentBalance');
+const { getStudentsWithBalance } = require('../utils/studentBalance');
 
+// Build a Statement of Account for one student, scoped strictly to the
+// requested school_year. The SOA is ALWAYS year-specific:
+//
+//   - Assessed Fees     = obligations WHERE school_year = sy
+//   - Payments Applied  = payments    WHERE school_year = sy
+//   - Previous Arrears  = per-year max(0, fees_y − paid_y) for y < sy,
+//                         only rows where the per-year owed > 0
+//   - Account Summary   = currentFees + totalArrears − currentYearPaid
+//
+// Previous-year fees and payments NEVER appear in the Assessed Fees or
+// Payments Applied tables — they're only summarised in the Previous
+// Arrears section, and only when the student actually has unpaid prior
+// years. A fully-paid student viewing a fresh school year sees a clean
+// slate (empty tables, ₱0 totals, NO OUTSTANDING BALANCE).
+//
+// Known limitation: students with cross-year-mislabeled payments (e.g.
+// fees tagged 2025-2026 but some payments tagged 2024-2025) may show
+// inconsistent per-year SOAs until the data is re-tagged. The strict-
+// per-year approach is the user's chosen trade-off (vs. the older
+// global-totals approach which was confusing for the no-arrears case).
 function buildSOA(studentId, schoolYear) {
   const student = db.prepare('SELECT * FROM students WHERE student_id = ?').get(studentId);
   if (!student) return null;
 
-  // === Current school year figures (for display) ===
+  // === Current school year obligations + payments (the visible tables) ===
   const obligations = db.prepare(
     `SELECT * FROM obligations WHERE student_id = ?${schoolYear ? ' AND school_year = ?' : ''} ORDER BY due_date ASC`
   ).all(...(schoolYear ? [studentId, schoolYear] : [studentId]));
 
-  // Payment History table shows ALL payments regardless of school_year label.
-  // A payment is money received from the parent — it reduces the student's
-  // total balance regardless of which year column it was tagged with. This
-  // is the only way the summary arithmetic ties out for students whose
-  // payments happened to be labeled against a neighboring year.
-  const allPayments = db.prepare(
-    `SELECT * FROM payments WHERE student_id = ? ORDER BY date ASC`
-  ).all(studentId);
+  const currentYearPayments = db.prepare(
+    `SELECT * FROM payments WHERE student_id = ?${schoolYear ? ' AND school_year = ?' : ''} ORDER BY date ASC`
+  ).all(...(schoolYear ? [studentId, schoolYear] : [studentId]));
 
   const currentFees = obligations.reduce((sum, o) => sum + o.amount, 0);
-  const currentYearPaid = db.prepare(
-    `SELECT COALESCE(SUM(amount),0) as t FROM payments WHERE student_id = ?${schoolYear ? ' AND school_year = ?' : ''}`
-  ).get(...(schoolYear ? [studentId, schoolYear] : [studentId])).t;
+  const currentYearPaid = currentYearPayments.reduce((sum, p) => sum + p.amount, 0);
 
-  // === Global (authoritative) totals — the source of truth ===
-  const { totalFees: globalFees, totalPaid: globalPaid, balance: remainingBalance } =
-    getStudentBalance(db, studentId);
-
-  // === Prior-year arrears (informational) ===
-  // Shown for transparency so the parent can see which past years were
-  // underpaid. Capped at the global remaining balance so the per-year
-  // breakdown never implies the student owes more than their actual total.
+  // === Prior-year arrears (Previous Arrears section) ===
+  // Per-year netting. A year that was overpaid contributes 0 (the school
+  // absorbs the credit). A year that was underpaid surfaces as one row.
   let arrears = [];
   let totalArrears = 0;
   if (schoolYear) {
@@ -67,23 +75,20 @@ function buildSOA(studentId, schoolYear) {
         totalArrears += owed;
       }
     }
-    // Cap the displayed arrears total at the global remaining balance so
-    // a cross-year-labeled payment doesn't produce a higher "arrears"
-    // number than the actual amount the student owes.
-    if (totalArrears > remainingBalance) {
-      totalArrears = remainingBalance;
-    }
   }
 
-  // === Status ===
-  // Driven entirely by the authoritative remaining balance so the
-  // printout status matches the Dashboard / Students list / Reports.
+  // === Account Summary totals — strictly per-year ===
+  const totalObligations = currentFees + totalArrears;
+  const rawRemaining = totalObligations - currentYearPaid;
+  let remainingBalance = Math.abs(rawRemaining) < 1 ? 0 : Math.max(0, rawRemaining);
+
+  // === Status — driven by the per-year remaining ===
   let status;
-  if (globalFees === 0) {
+  if (totalObligations === 0) {
     status = 'NO OUTSTANDING BALANCE';
   } else if (remainingBalance === 0) {
     status = 'FULLY PAID';
-  } else if (globalPaid > 0) {
+  } else if (currentYearPaid > 0) {
     status = 'PARTIAL';
   } else {
     status = 'UNPAID';
@@ -96,20 +101,19 @@ function buildSOA(studentId, schoolYear) {
   return {
     student,
     obligations,
-    // Payment History table shows ALL payments so the "Total Paid" total
-    // ties out against the authoritative global balance.
-    payments: allPayments,
-    allPayments,
+    payments: currentYearPayments, // current year only — strict scoping
     arrears,
     totals: {
-      totalFees: globalFees,     // authoritative total fees across all years
-      totalPaid: globalPaid,     // authoritative total paid across all years
-      balance: remainingBalance, // globally-floored, matches Dashboard
+      // totalFees / totalPaid are aliased to currentFees / currentYearPaid
+      // for backward compat with the SOADocument's TOTAL row labels.
+      totalFees: currentFees,
+      totalPaid: currentYearPaid,
+      balance: remainingBalance,
       status,
       arrears: totalArrears,
       currentFees,
       currentPaid: currentYearPaid,
-      totalObligations: globalFees,
+      totalObligations,
       remainingBalance,
     },
     schoolInfo,

@@ -9,6 +9,7 @@ import { useToast } from '../components/Toast';
 import InlineEdit from '../components/InlineEdit';
 import { api } from '../utils/api';
 import { getCurrentSchoolYear } from '../utils/schoolYear';
+import { useSchoolYear } from '../utils/useSchoolYear';
 import { formatCurrency, formatDate } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 
@@ -20,6 +21,11 @@ export default function StudentDetail({ onMenuClick }) {
   const addToast = useToast();
   const { hasRole } = useAuth();
   const canEdit = hasRole('Admin', 'Registrar', 'Treasurer');
+  // Authoritative current school year from school_settings, used for the
+  // Enroll button label so it reflects the year the click will actually
+  // enroll the student into (the /enroll endpoint bumps student.school_year
+  // forward to current_school_year before generating fees — commit 4745bc7).
+  const { current: currentSY } = useSchoolYear();
 
   const [student, setStudent] = useState(null);
   const [obligations, setObligations] = useState([]);
@@ -271,7 +277,7 @@ export default function StudentDetail({ onMenuClick }) {
         </button>
         {canEdit && (student.status === 'Registered' || student.status === 'Not Enrolled') && (
           <button onClick={handleEnroll} disabled={enrolling} className="bg-status-success hover:bg-status-success/90 text-white px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50">
-            {enrolling ? 'Enrolling...' : `Enroll for S.Y. ${student.school_year || ''}`}
+            {enrolling ? 'Enrolling...' : `Enroll for S.Y. ${currentSY || student.school_year || ''}`}
           </button>
         )}
         {canEdit && (student.status === 'Enrolled' || student.status === 'LOA') && (
