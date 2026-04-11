@@ -43,7 +43,16 @@ const upload = multer({
 //   - balance = currentBalance + priorArrears (per-year-floored)
 //   - status overridden to 'Not Enrolled' if no record for this year
 //   - pay_status may be null (blank badge) when nothing assessed
-//   - rows with no current-year record AND no prior arrears are HIDDEN
+//
+// Visibility rules:
+//   - Viewing the CURRENT school year: show EVERYONE so the registrar
+//     can individually re-enroll returning students after EOY. The
+//     per-row status is whatever students.status says (Enrolled /
+//     Not Enrolled / Dropped / etc.).
+//   - Viewing a PAST (non-current) school year: hide students with
+//     no year record and no prior arrears, so historical views stay
+//     scoped to students who were actually part of that year.
+//
 // Without school_year: global (all-years) view using per-year-floored balance.
 router.get('/', (req, res) => {
   try {
@@ -70,11 +79,19 @@ router.get('/', (req, res) => {
     const students = db.prepare(sql).all(...params);
 
     if (school_year) {
+      const currentSY = db.prepare(
+        "SELECT value FROM school_settings WHERE key = 'current_school_year'"
+      ).get()?.value;
+      const isCurrentYearView = school_year === currentSY;
+
       const result = [];
       for (const s of students) {
         const view = getStudentYearView(db, s.student_id, s, school_year);
-        // Hide students with no year record and no arrears
-        if (!view.hasCurrentYearRecord && view.priorArrears === 0) continue;
+        // Past/locked year: hide rows with no record AND no arrears so
+        // the historical view is scoped to who was actually in that year.
+        // Current year: show everyone so registrars can individually
+        // (re-)enroll returning students after EOY.
+        if (!isCurrentYearView && !view.hasCurrentYearRecord && view.priorArrears === 0) continue;
         // Apply status filter against the DERIVED status
         if (status && view.status !== status) continue;
         result.push({
@@ -171,6 +188,12 @@ router.post('/', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
 });
 
 // POST /api/students/bulk-enroll — Enroll multiple students (before parameterized routes)
+//
+// Same bump-to-current-SY behavior as the single enroll endpoint:
+// each student's school_year is migrated forward to the current SY
+// (and dropped_date cleared for Dropped students) inside the
+// transaction, before calling enrollStudent(). Lock check is against
+// the target (current) year, not each student's stale row.
 router.post('/bulk-enroll', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
     const { studentIds } = req.body;
@@ -178,20 +201,29 @@ router.post('/bulk-enroll', requireRole('Admin', 'Registrar', 'Treasurer'), (req
       return res.status(400).json({ error: 'studentIds array is required' });
     }
 
-    // Block if ANY of the students is in a locked school year
-    const locked = db.prepare(`
-      SELECT student_id, school_year FROM students
-      WHERE student_id IN (${studentIds.map(() => '?').join(',')})
-    `).all(...studentIds);
-    for (const s of locked) {
-      const lockErr = assertCanModifyYear(req, s.school_year);
-      if (lockErr) return res.status(403).json({ error: `${lockErr} (student ${s.student_id})` });
-    }
+    const currentSY = db.prepare(
+      "SELECT value FROM school_settings WHERE key = 'current_school_year'"
+    ).get()?.value;
+    if (!currentSY) return res.status(500).json({ error: 'current_school_year setting is missing' });
+
+    const lockErr = assertCanModifyYear(req, currentSY);
+    if (lockErr) return res.status(403).json({ error: lockErr });
 
     const results = [];
     const bulkEnroll = db.transaction(() => {
       for (const sid of studentIds) {
         try {
+          const row = db.prepare(
+            'SELECT school_year, status FROM students WHERE student_id = ?'
+          ).get(sid);
+          if (!row) throw new Error('Student not found');
+          if (row.school_year !== currentSY || row.status === 'Dropped') {
+            db.prepare(
+              `UPDATE students SET school_year = ?, dropped_date = NULL,
+                                   updated_at = datetime('now','localtime')
+               WHERE student_id = ?`
+            ).run(currentSY, sid);
+          }
           const r = enrollStudent(sid, db);
           results.push({ studentId: sid, success: true, ...r });
         } catch (err) {
@@ -209,15 +241,46 @@ router.post('/bulk-enroll', requireRole('Admin', 'Registrar', 'Treasurer'), (req
 });
 
 // POST /api/students/:studentId/enroll — Enroll a single student
+//
+// Always targets the CURRENT school year. If the student's
+// students.school_year is stale (typical after EOY — they were
+// promoted so their row still says the just-closed year), we bump
+// it to the current SY before calling enrollStudent() so the new
+// obligations are tagged to the correct year. Also clears
+// dropped_date if the student was previously Dropped.
+//
+// The lock check is against the TARGET year (current SY), not the
+// student's stale school_year, because we're moving them FORWARD
+// into a new (unlocked) year, not writing into the old (locked) one.
 router.post('/:studentId/enroll', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
-    const student = db.prepare('SELECT school_year FROM students WHERE student_id = ?').get(req.params.studentId);
+    const student = db.prepare(
+      'SELECT school_year, status, dropped_date FROM students WHERE student_id = ?'
+    ).get(req.params.studentId);
     if (!student) return res.status(404).json({ error: 'Student not found' });
 
-    const lockErr = assertCanModifyYear(req, student.school_year);
+    const currentSY = db.prepare(
+      "SELECT value FROM school_settings WHERE key = 'current_school_year'"
+    ).get()?.value;
+    if (!currentSY) return res.status(500).json({ error: 'current_school_year setting is missing' });
+
+    // Target year must not be locked (defensive — current should never be locked)
+    const lockErr = assertCanModifyYear(req, currentSY);
     if (lockErr) return res.status(403).json({ error: lockErr });
 
-    const result = db.transaction(() => enrollStudent(req.params.studentId, db))();
+    const result = db.transaction(() => {
+      // Bump student to current SY + clear dropped_date if needed,
+      // BEFORE calling enrollStudent() which reads students.school_year.
+      if (student.school_year !== currentSY || student.status === 'Dropped') {
+        db.prepare(
+          `UPDATE students SET school_year = ?, dropped_date = NULL,
+                               updated_at = datetime('now','localtime')
+           WHERE student_id = ?`
+        ).run(currentSY, req.params.studentId);
+      }
+      return enrollStudent(req.params.studentId, db);
+    })();
+
     const updated = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
     res.json({ ...updated, enrolled: true, tuitionCount: result.tuitionCount, otherFeesCount: result.otherFeesCount });
   } catch (err) {

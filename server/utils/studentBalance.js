@@ -126,7 +126,21 @@ function getStudentYearView(db, studentId, studentRow, schoolYear) {
     currentFees > 0 || (studentRow && studentRow.school_year === schoolYear);
 
   const rawStatus = studentRow ? studentRow.status : null;
-  const status = hasCurrentYearRecord ? rawStatus : 'Not Enrolled';
+  // Status derivation:
+  //   - Dropped and Graduated are TERMINAL states — they persist across
+  //     year views. A dropped student still shows as "Dropped" in the
+  //     new year view so the registrar's re-enroll UI can tell them apart
+  //     from students who were never enrolled.
+  //   - Otherwise, if the student has no record for this year, derive
+  //     "Not Enrolled" (they must be explicitly enrolled for the year).
+  let status;
+  if (rawStatus === 'Dropped' || rawStatus === 'Graduated') {
+    status = rawStatus;
+  } else if (hasCurrentYearRecord) {
+    status = rawStatus;
+  } else {
+    status = 'Not Enrolled';
+  }
 
   // Pay status derivation — STRICTLY about current-year fees. Students
   // with no current-year assessment render a BLANK badge regardless of

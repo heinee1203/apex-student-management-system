@@ -270,8 +270,13 @@ export default function Students({ onMenuClick }) {
                     <td className="px-4 py-2"><PayStatusBadge status={s.pay_status} /></td>
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-1">
-                        {canEdit && (s.status === 'Registered' || s.status === 'Not Enrolled') && (
-                          <button onClick={() => handleEnroll(s.student_id)} disabled={enrolling} className="text-[#2E8B6A] hover:text-[#257256] p-1" title="Enroll">
+                        {canEdit && (s.status === 'Registered' || s.status === 'Not Enrolled' || s.status === 'Dropped') && (
+                          <button
+                            onClick={() => handleEnroll(s.student_id)}
+                            disabled={enrolling}
+                            className="text-[#2E8B6A] hover:text-[#257256] p-1"
+                            title={s.status === 'Dropped' ? 'Re-enroll' : 'Enroll'}
+                          >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                           </button>
                         )}
