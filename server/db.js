@@ -114,6 +114,38 @@ function initializeDatabase() {
       last_login    TEXT
     );
 
+    -- ============================================================
+    -- NOTE FOR FUTURE END-OF-YEAR REIMPLEMENTATION
+    -- ------------------------------------------------------------
+    -- The original End-of-Year rollover feature was deleted on
+    -- 2026-04-11 (commit 5b468a4) after repeated data integrity
+    -- incidents. If/when a new EOY is built, the implementation
+    -- MUST meet the following requirements. These come from the
+    -- postmortem of the previous version's failure modes — in
+    -- particular the 2026-04-10 incident where 18 students' grade
+    -- levels, statuses, AND sections were mutated, but only
+    -- grade/status could be restored on revert because sections
+    -- were never captured anywhere (each section had to be
+    -- re-entered by the registrar from memory):
+    --
+    --   1. Before mutating ANY student row, the old row must be
+    --      snapshotted in full as JSON. Add a "data TEXT" column
+    --      to this table and store the complete students row
+    --      (status, grade_level, section, payment_term,
+    --       total_tuition, school_year, date_enrolled, ...).
+    --   2. The revert endpoint reads the "data" column and
+    --      restores every column, not just status + grade_level.
+    --   3. The audit_log entry must include a per-student change
+    --      list with from/to for status, grade_level, AND section
+    --      (at minimum).
+    --   4. A dry-run preview endpoint must show exactly what will
+    --      change per-student before the user commits. The old
+    --      version only showed aggregate counts.
+    --   5. The cleanup/revert endpoints MUST NOT wipe the most
+    --      recent year_end_snapshots rows unless explicitly
+    --      instructed with a confirmation flag. The old cleanup
+    --      was too eager and destroyed the only recovery path.
+    -- ============================================================
     CREATE TABLE IF NOT EXISTS year_end_snapshots (
       id             TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
       student_id     TEXT NOT NULL,
