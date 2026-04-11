@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import Modal from '../components/Modal';
@@ -47,6 +47,10 @@ export default function Students({ onMenuClick }) {
   const [bulkSelected, setBulkSelected] = useState([]);
   const [bulkGradeFilter, setBulkGradeFilter] = useState('');
   const [enrolling, setEnrolling] = useState(false);
+  // Inline (in-table) bulk selection — separate from the bulk-enroll modal.
+  // Set of student_ids the registrar has checked in the rows for "Enroll
+  // Selected". Cleared on filter / SY change so stale selections don't leak.
+  const [selectedIds, setSelectedIds] = useState(new Set());
   const addToast = useToast();
   const navigate = useNavigate();
   const { hasRole } = useAuth();
@@ -160,7 +164,7 @@ export default function Students({ onMenuClick }) {
     }
   };
 
-  const enrollableStudents = students.filter(s => s.status === 'Registered' || s.status === 'Not Enrolled');
+  const enrollableStudents = students.filter(s => s.status === 'Registered' || s.status === 'Not Enrolled' || s.status === 'Dropped');
   const bulkFilteredStudents = bulkGradeFilter ? enrollableStudents.filter(s => s.grade_level === bulkGradeFilter) : enrollableStudents;
 
   const setField = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
@@ -173,6 +177,84 @@ export default function Students({ onMenuClick }) {
   });
   const hasActiveFilters = filterGrade || filterTerm || filterPayStatus;
   const clearFilters = () => { setSearch(''); setFilterGrade(''); setFilterTerm(''); setFilterPayStatus(''); };
+
+  // Enrollment progress: how many of the eligible students are already
+  // Enrolled in the current SY view. Excludes Dropped + Graduated from
+  // the denominator per the user's spec. Hidden when viewing a locked
+  // year (no enrollment happens there) or when there's nothing to track.
+  const enrollmentProgress = useMemo(() => {
+    if (isLocked) return null;
+    const eligible = students.filter(s => s.status !== 'Dropped' && s.status !== 'Graduated');
+    if (eligible.length === 0) return null;
+    const enrolled = eligible.filter(s => s.status === 'Enrolled').length;
+    return { enrolled, total: eligible.length, percent: Math.round((enrolled / eligible.length) * 100) };
+  }, [students, isLocked]);
+
+  // Inline checkbox selection — only enrollable rows can be selected.
+  // (Enrolled / Graduated rows show an empty cell instead of a checkbox.)
+  const filteredEnrollable = useMemo(
+    () => filtered.filter(s => s.status !== 'Enrolled' && s.status !== 'Graduated'),
+    [filtered]
+  );
+  const allEnrollableSelected = filteredEnrollable.length > 0 &&
+    filteredEnrollable.every(s => selectedIds.has(s.student_id));
+  const togglePageSelection = () => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allEnrollableSelected) {
+        for (const s of filteredEnrollable) next.delete(s.student_id);
+      } else {
+        for (const s of filteredEnrollable) next.add(s.student_id);
+      }
+      return next;
+    });
+  };
+  const toggleRow = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  // Clear inline selection when the SY changes or filters wipe.
+  useEffect(() => { setSelectedIds(new Set()); }, [schoolYear]);
+
+  const handleBulkEnrollSelected = async () => {
+    if (selectedIds.size === 0) return;
+    try {
+      setEnrolling(true);
+      const ids = Array.from(selectedIds);
+      const result = await api.bulkEnrollStudents(ids);
+      const successCount = result.results.filter(r => r.success).length;
+      const failCount = result.results.filter(r => !r.success).length;
+      addToast(`Bulk enroll: ${successCount} enrolled${failCount > 0 ? `, ${failCount} failed` : ''}`);
+      setSelectedIds(new Set());
+      load();
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
+  // Subtle row tinting per derived status — peripheral cue, not loud.
+  // Enrolled = default, Not Enrolled / LOA = warm tint, Registered =
+  // steel tint, Dropped / Graduated = greyed out.
+  const rowClassForStatus = (status) => {
+    switch (status) {
+      case 'Not Enrolled':
+      case 'LOA':
+        return 'bg-status-warning/5';
+      case 'Registered':
+        return 'bg-brand-steel/5';
+      case 'Dropped':
+      case 'Graduated':
+        return 'opacity-60';
+      default:
+        return '';
+    }
+  };
 
   return (
     <div>
@@ -223,6 +305,60 @@ export default function Students({ onMenuClick }) {
 
       <div className="p-6">
         {isLocked && <LockedYearBanner schoolYear={schoolYear} />}
+
+        {/* Enrollment progress — only on current SY view, only when there's
+            something to track. Slim card with text + horizontal bar. */}
+        {enrollmentProgress && (
+          <div className="bg-white border border-brand-border rounded-xl px-5 py-3 mb-3 flex items-center gap-4">
+            <div className="flex-1">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium text-brand-navy">
+                  Enrollment Progress for {schoolYear}
+                </span>
+                <span className="text-brand-slate">
+                  <strong className="text-brand-navy">{enrollmentProgress.enrolled}</strong>
+                  {' / '}
+                  <strong className="text-brand-navy">{enrollmentProgress.total}</strong>
+                  {' enrolled '}
+                  <span className="text-xs">({enrollmentProgress.percent}%)</span>
+                </span>
+              </div>
+              <div className="mt-2 h-2 bg-brand-light rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-status-success transition-all duration-300"
+                  style={{ width: `${enrollmentProgress.percent}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Inline bulk action bar — appears when rows are checked. Uses the
+            existing /api/students/bulk-enroll endpoint which (post-EOY fix)
+            bumps each student's school_year + clears dropped_date. */}
+        {canEdit && selectedIds.size > 0 && (
+          <div className="bg-status-success/10 border border-status-success/30 rounded-lg px-4 py-2 mb-3 flex items-center justify-between">
+            <span className="text-sm text-brand-navy">
+              <strong>{selectedIds.size}</strong> selected for enrollment
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="text-sm text-brand-slate hover:text-brand-navy px-3 py-1"
+              >
+                Clear
+              </button>
+              <button
+                onClick={handleBulkEnrollSelected}
+                disabled={enrolling}
+                className="text-sm text-white bg-status-success hover:bg-[#257256] px-3 py-1 rounded-lg disabled:opacity-50"
+              >
+                {enrolling ? 'Enrolling…' : `Enroll ${selectedIds.size} Selected`}
+              </button>
+            </div>
+          </div>
+        )}
+
         {(hasActiveFilters || search) && (
           <p className="text-xs text-brand-slate mb-2">Showing {filtered.length} of {students.length} students</p>
         )}
@@ -231,6 +367,17 @@ export default function Students({ onMenuClick }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-brand-slate border-b border-brand-border bg-brand-light">
+                  {canEdit && (
+                    <th className="px-3 py-3 w-8">
+                      <input
+                        type="checkbox"
+                        checked={allEnrollableSelected}
+                        onChange={togglePageSelection}
+                        className="accent-brand-steel"
+                        title="Select all enrollable students on this page"
+                      />
+                    </th>
+                  )}
                   <th className="px-4 py-3">Student ID</th>
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Grade/Year</th>
@@ -245,8 +392,23 @@ export default function Students({ onMenuClick }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(s => (
-                  <tr key={s.student_id} className="border-b border-brand-border/50 hover:bg-brand-light/50">
+                {filtered.map(s => {
+                  const isEnrollable = s.status !== 'Enrolled' && s.status !== 'Graduated';
+                  const isSelected = selectedIds.has(s.student_id);
+                  return (
+                  <tr key={s.student_id} className={`border-b border-brand-border/50 hover:bg-brand-light/50 ${rowClassForStatus(s.status)} ${isSelected ? 'bg-brand-steel/5' : ''}`}>
+                    {canEdit && (
+                      <td className="px-3 py-2">
+                        {isEnrollable && (
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleRow(s.student_id)}
+                            className="accent-brand-steel"
+                          />
+                        )}
+                      </td>
+                    )}
                     <td className="px-4 py-2 font-mono text-xs text-brand-slate">{s.student_id}</td>
                     <td className="px-4 py-2">
                       <Link to={`/students/${s.student_id}`} className="text-brand-steel hover:text-brand-teal font-medium flex items-center gap-2">
@@ -295,9 +457,10 @@ export default function Students({ onMenuClick }) {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
                 {filtered.length === 0 && !loading && (
-                  <tr><td colSpan={11} className="px-4 py-8 text-center text-brand-slate">No students found</td></tr>
+                  <tr><td colSpan={canEdit ? 12 : 11} className="px-4 py-8 text-center text-brand-slate">No students found</td></tr>
                 )}
               </tbody>
             </table>

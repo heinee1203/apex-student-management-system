@@ -245,26 +245,53 @@ router.post('/end-of-school-year', (req, res) => {
       }
 
       // 2) Mutate: promote Enrolled, graduate Grade 6, leave others alone.
+      //
+      // For each promoted student, look up the tuition_schedule for the
+      // NEW grade in the NEXT school year and update total_tuition so the
+      // Students page reads the correct rate immediately after EOY (no
+      // need to wait until the registrar clicks Enroll). Same Monthly /
+      // Quarterly / Annually math as enrollStudent.js (lines 31-34) so
+      // both code paths agree on the computed total. If no schedule row
+      // exists for the new year + new grade, leave total_tuition as-is —
+      // the registrar will set up the schedule before enrolling.
       const updateStmt = db.prepare(
-        `UPDATE students SET status = ?, grade_level = ?, updated_at = datetime('now','localtime')
+        `UPDATE students SET status = ?, grade_level = ?, total_tuition = ?,
+                              updated_at = datetime('now','localtime')
          WHERE student_id = ?`
+      );
+      const lookupRate = db.prepare(
+        `SELECT * FROM tuition_schedule WHERE grade_level = ? AND school_year = ?`
       );
       const changes = [];
       let promoted = 0, graduated = 0, unchanged = 0;
       for (const { s, totalFees, totalPaid, balance } of snapshotPreviews) {
         let newGrade = s.grade_level;
         let newStatus = s.status;
+        let newTotalTuition = s.total_tuition || 0;
 
         if (s.status === 'Enrolled') {
           if (s.grade_level === 'Grade 6') {
             newStatus = 'Graduated';
             graduated++;
+            // Graduated students keep their existing total_tuition
+            // (Grade 6 doesn't transition to a next year's schedule)
           } else {
             newGrade = PROMOTION_MAP[s.grade_level] || s.grade_level;
             newStatus = 'Not Enrolled';
             promoted++;
+
+            // Look up new year's tuition rate for the new grade
+            if (s.payment_term) {
+              const rate = lookupRate.get(newGrade, nextSY);
+              if (rate) {
+                if (s.payment_term === 'Monthly')         newTotalTuition = rate.monthly_rate * 10;
+                else if (s.payment_term === 'Quarterly')  newTotalTuition = rate.quarterly_rate * 4;
+                else if (s.payment_term === 'Annually')   newTotalTuition = rate.annual_rate;
+              }
+              // If no schedule row, newTotalTuition stays at the old value
+            }
           }
-          updateStmt.run(newStatus, newGrade, s.student_id);
+          updateStmt.run(newStatus, newGrade, newTotalTuition, s.student_id);
         } else {
           unchanged++;
         }
@@ -276,6 +303,8 @@ router.post('/end-of-school-year', (req, res) => {
           newGrade,
           oldStatus: s.status,
           newStatus,
+          oldTotalTuition: s.total_tuition || 0,
+          newTotalTuition,
           totalFees,
           totalPaid,
           balanceCarried: balance,
