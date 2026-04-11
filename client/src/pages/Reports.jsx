@@ -42,7 +42,13 @@ export default function Reports({ onMenuClick }) {
   const [aging, setAging] = useState({ rows: [], totals: { current: 0, d30: 0, d60: 0, d90: 0, d90plus: 0, total: 0 } });
   const [collectionsMonth, setCollectionsMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [collections, setCollections] = useState({ rows: [], total: 0, paymentCount: 0 });
-  const { selectedSY: enrollmentYear, setSelectedSY: setEnrollmentYear, availableYears: schoolYears } = useSchoolYear();
+  const {
+    selectedSY: enrollmentYear,
+    setSelectedSY: setEnrollmentYear,
+    availableYears: schoolYears,
+    showDropdown,
+    lockedYears,
+  } = useSchoolYear();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -92,14 +98,18 @@ export default function Reports({ onMenuClick }) {
           <div className="px-5 py-3 border-b border-brand-border flex items-center justify-between gap-3">
             <h3 className="text-sm font-semibold text-brand-teal">Enrollment Summary</h3>
             <div className="flex items-center gap-2">
-              <label className="no-print text-xs text-brand-slate">School Year:</label>
-              <select
-                value={enrollmentYear || ''}
-                onChange={e => setEnrollmentYear(e.target.value)}
-                className="no-print bg-white border border-brand-border rounded-lg px-2 py-1 text-xs text-brand-navy font-mono focus:outline-none focus:border-brand-steel"
-              >
-                {schoolYears.map(sy => <option key={sy} value={sy}>{sy}</option>)}
-              </select>
+              {showDropdown && (
+                <>
+                  <label className="no-print text-xs text-brand-slate">School Year:</label>
+                  <select
+                    value={enrollmentYear || ''}
+                    onChange={e => setEnrollmentYear(e.target.value)}
+                    className="no-print bg-white border border-brand-border rounded-lg px-2 py-1 text-xs text-brand-navy font-mono focus:outline-none focus:border-brand-steel"
+                  >
+                    {schoolYears.map(sy => <option key={sy} value={sy}>{sy}{lockedYears.includes(sy) ? ' 🔒' : ''}</option>)}
+                  </select>
+                </>
+              )}
               <ExportBtn onClick={() => exportCSV(
                 `enrollment_summary_${enrollmentYear}.csv`,
                 ['Grade Level', ...enrollment.statuses, 'Total'],

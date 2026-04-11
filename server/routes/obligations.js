@@ -33,6 +33,9 @@ router.post('/bulk', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) 
       return res.status(400).json({ error: 'grade_level, school_year, fee_type, and amount are required' });
     }
 
+    const lockErr = assertCanModifyYear(req, school_year);
+    if (lockErr) return res.status(403).json({ error: lockErr });
+
     const students = db.prepare(
       `SELECT student_id FROM students WHERE grade_level = ? AND school_year = ? AND status = 'Enrolled'`
     ).all(grade_level, school_year);

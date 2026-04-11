@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
+import LockedYearBanner from '../components/LockedYearBanner';
 import { api } from '../utils/api';
 import { formatCurrency, formatDate } from '../utils/format';
 import { useSchoolYear } from '../utils/useSchoolYear';
@@ -12,7 +13,14 @@ export default function Dashboard({ onMenuClick }) {
   const [recentPayments, setRecentPayments] = useState([]);
   const [balanceList, setBalanceList] = useState([]);
   const [feeBreakdown, setFeeBreakdown] = useState([]);
-  const { selectedSY, setSelectedSY, availableYears: schoolYears } = useSchoolYear();
+  const {
+    selectedSY,
+    setSelectedSY,
+    availableYears: schoolYears,
+    showDropdown,
+    isLocked,
+    lockedYears,
+  } = useSchoolYear();
   const [loading, setLoading] = useState(true);
 
   // Load dashboard data whenever selectedSY changes. Wait for the hook
@@ -40,8 +48,8 @@ export default function Dashboard({ onMenuClick }) {
     <div>
       <TopBar title="Dashboard" onMenuClick={onMenuClick} />
       <div className="p-6 space-y-6">
-        {/* School Year Filter */}
-        {schoolYears.length > 0 && (
+        {/* School Year Filter — Admin only */}
+        {showDropdown && schoolYears.length > 0 && (
           <div className="flex items-center gap-3">
             <label className="text-sm font-medium text-brand-slate">School Year</label>
             <select
@@ -50,11 +58,14 @@ export default function Dashboard({ onMenuClick }) {
               className="bg-white border border-brand-border rounded-lg px-3 py-1.5 text-sm text-brand-navy focus:outline-none focus:border-brand-steel"
             >
               {schoolYears.map(sy => (
-                <option key={sy} value={sy}>{sy}</option>
+                <option key={sy} value={sy}>{sy}{lockedYears.includes(sy) ? ' 🔒' : ''}</option>
               ))}
             </select>
           </div>
         )}
+
+        {/* Read-only banner when viewing a locked year */}
+        {isLocked && <LockedYearBanner schoolYear={selectedSY} />}
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">

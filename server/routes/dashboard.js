@@ -2,23 +2,40 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { getYearFlooredBalance, getStudentYearView, getStudentsWithBalance } = require('../utils/studentBalance');
+const { getLockedYears } = require('../utils/schoolYearLock');
 
 // GET /api/dashboard/school-years — school years available in dropdowns.
-// Returns { years, current } where:
-//   years    = the distinct school_year values that actually exist in the
-//              DB (from obligations, payments, or students). No auto-
-//              generated future years, no date-computed rollovers.
-//   current  = school_settings.current_school_year — the authoritative
-//              "active" school year that every page defaults its dropdown
-//              to. Always included in `years` so the dropdown can render
-//              it even if no data exists for it yet.
+// Returns { years, current, locked, showDropdown } where:
+//   years         = distinct school_year values actually present in DB
+//                   (obligations / payments / students). For non-Admin
+//                   callers this collapses to just [current] so they
+//                   can't browse historical/future years.
+//   current       = school_settings.current_school_year (authoritative)
+//   locked        = array of school_year values in school_settings.locked_school_years
+//                   Used by the frontend to render 🔒 markers and apply
+//                   read-only banners for closed years.
+//   showDropdown  = true only for Admin. Other roles get a hidden
+//                   dropdown and are hard-locked to the current year.
 router.get('/school-years', (req, res) => {
   try {
     const row = db.prepare(
       `SELECT value FROM school_settings WHERE key = 'current_school_year'`
     ).get();
     const current = (row && row.value) || null;
+    const locked = getLockedYears();
+    const isAdmin = req.user && req.user.role === 'Admin';
 
+    if (!isAdmin) {
+      // Non-admin: hard-locked to current year, dropdown hidden
+      return res.json({
+        years: current ? [current] : [],
+        current,
+        locked,
+        showDropdown: false,
+      });
+    }
+
+    // Admin: all years present in DB plus current, sorted newest first
     const rows = db.prepare(`
       SELECT DISTINCT school_year FROM (
         SELECT school_year FROM obligations
@@ -31,9 +48,10 @@ router.get('/school-years', (req, res) => {
 
     const set = new Set(rows.map(r => r.school_year).filter(Boolean));
     if (current) set.add(current);
+    for (const y of locked) set.add(y);
 
     const years = [...set].sort().reverse();
-    res.json({ years, current });
+    res.json({ years, current, locked, showDropdown: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

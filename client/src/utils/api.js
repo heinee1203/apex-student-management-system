@@ -68,6 +68,13 @@ export const api = {
   getAuditLog: () => request('/admin/audit-log'),
   // One-shot cleanup used to wipe EOY leftovers from the DB. Admin-only.
   cleanupEoyArtifacts: (body) => request('/admin/cleanup-eoy-artifacts', { method: 'POST', body: JSON.stringify(body) }),
+  // End of School Year v2 — Admin only. Preview is a read-only dry run.
+  // Execute requires { confirm: "CLOSE <current SY>" }. Revert requires
+  // { schoolYear, confirm: "REVERT <SY>" } and restores students from
+  // the snapshot's `data` JSON.
+  eoyPreview: () => request('/admin/end-of-school-year/preview'),
+  eoyExecute: (body) => request('/admin/end-of-school-year', { method: 'POST', body: JSON.stringify(body) }),
+  eoyRevert: (body) => request('/admin/revert-end-of-school-year', { method: 'POST', body: JSON.stringify(body) }),
 
   // Obligations
   getObligations: (params = {}) => {

@@ -125,11 +125,23 @@ catch {
       arrears_amount REAL NOT NULL DEFAULT 0,
       snapshot_date  TEXT NOT NULL,
       created_by     TEXT,
+      data           TEXT,
       UNIQUE(student_id, school_year)
     );
     CREATE INDEX idx_snapshots_student ON year_end_snapshots(student_id);
     CREATE INDEX idx_snapshots_sy ON year_end_snapshots(school_year);
   `);
+}
+// Migration: ensure year_end_snapshots has the `data` column.
+// Added 2026-04-11 as part of the EOY v2 rebuild. The `data` column
+// stores the full pre-EOY student row as JSON so revert can restore
+// status, grade_level, section, payment_term, and any other mutable
+// field. Without this column, revert can only restore status + grade.
+try {
+  db.prepare('SELECT data FROM year_end_snapshots LIMIT 1').get();
+} catch {
+  db.exec('ALTER TABLE year_end_snapshots ADD COLUMN data TEXT');
+  console.log('Migration: added data column to year_end_snapshots');
 }
 try { db.prepare('SELECT id FROM audit_log LIMIT 1').get(); }
 catch {
@@ -287,6 +299,9 @@ app.use('/api/default-fees', authenticate, require('./routes/defaultFees'));
 app.use('/api/settings', authenticate, requireRole('Admin'), require('./routes/settings'));
 app.use('/api/users', authenticate, requireRole('Admin'), require('./routes/users'));
 app.use('/api/admin', authenticate, requireRole('Admin'), require('./routes/admin'));
+// End-of-Year v2 — also admin-only, mounted under /api/admin so the wizard
+// hits /api/admin/end-of-school-year/preview etc.
+app.use('/api/admin', authenticate, requireRole('Admin'), require('./routes/endOfYear'));
 
 // Serve uploaded files (photos)
 app.use('/uploads/photos', express.static(UPLOADS_DIR));

@@ -6,6 +6,7 @@ import { useToast } from '../components/Toast';
 import { api } from '../utils/api';
 import { formatCurrency, formatDate } from '../utils/format';
 import { useSchoolYear } from '../utils/useSchoolYear';
+import LockedYearBanner from '../components/LockedYearBanner';
 import { useAuth } from '../context/AuthContext';
 
 const methods = ['Cash', 'GCash', 'Maya', 'Bank Transfer', 'Check', 'Installment Plan'];
@@ -42,11 +43,18 @@ export default function Payments({ onMenuClick }) {
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   // School-year context from the DB (authoritative current_school_year)
-  const { selectedSY: filterSY, setSelectedSY: setFilterSY, availableYears: schoolYears } = useSchoolYear();
+  const {
+    selectedSY: filterSY,
+    setSelectedSY: setFilterSY,
+    availableYears: schoolYears,
+    showDropdown,
+    isLocked,
+    lockedYears,
+  } = useSchoolYear();
   const [form, setForm] = useState({ student_id: '', amount: '', date: '', method: 'Cash', receipt_no: '', school_year: '', notes: '' });
   const addToast = useToast();
   const { hasRole } = useAuth();
-  const canEdit = hasRole('Admin', 'Registrar', 'Treasurer');
+  const canEdit = hasRole('Admin', 'Registrar', 'Treasurer') && !isLocked;
 
   // Filters (school year lives in the hook above)
   const [filterGrade, setFilterGrade] = useState('');
@@ -228,6 +236,7 @@ export default function Payments({ onMenuClick }) {
       </TopBar>
 
       <div className="p-6 space-y-4">
+        {isLocked && <LockedYearBanner schoolYear={filterSY} />}
         {/* Stat Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white border border-brand-border border-l-4 border-l-brand-steel rounded-xl p-4 shadow-sm">
@@ -266,10 +275,12 @@ export default function Payments({ onMenuClick }) {
             <option value="">All Methods</option>
             {methods.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
-          <select value={filterSY || ''} onChange={e => setFilterSY(e.target.value)} className={selectClass}>
-            <option value="">All Years</option>
-            {schoolYears.map(sy => <option key={sy} value={sy}>{sy}</option>)}
-          </select>
+          {showDropdown && (
+            <select value={filterSY || ''} onChange={e => setFilterSY(e.target.value)} className={selectClass}>
+              <option value="">All Years</option>
+              {schoolYears.map(sy => <option key={sy} value={sy}>{sy}{lockedYears.includes(sy) ? ' 🔒' : ''}</option>)}
+            </select>
+          )}
           <div className="relative">
             <input
               type="text"

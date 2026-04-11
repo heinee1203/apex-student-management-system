@@ -9,6 +9,7 @@ import { useToast } from '../components/Toast';
 import { api } from '../utils/api';
 import { formatCurrency } from '../utils/format';
 import { useSchoolYear } from '../utils/useSchoolYear';
+import LockedYearBanner from '../components/LockedYearBanner';
 import { useAuth } from '../context/AuthContext';
 
 const gradeLevels = ['Nursery 1', 'Nursery 2', 'Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
@@ -28,7 +29,14 @@ export default function Students({ onMenuClick }) {
   // SY context from the backend hook — defaults to the DB's
   // authoritative current_school_year. List fetches are gated on
   // !schoolYear so we don't issue a query with a stale default.
-  const { selectedSY: schoolYear, setSelectedSY: setSchoolYear, availableYears: schoolYears } = useSchoolYear();
+  const {
+    selectedSY: schoolYear,
+    setSelectedSY: setSchoolYear,
+    availableYears: schoolYears,
+    showDropdown,
+    isLocked,
+    lockedYears,
+  } = useSchoolYear();
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -42,7 +50,8 @@ export default function Students({ onMenuClick }) {
   const addToast = useToast();
   const navigate = useNavigate();
   const { hasRole } = useAuth();
-  const canEdit = hasRole('Admin', 'Registrar', 'Treasurer');
+  // canEdit = role permits writes AND selected year is not locked
+  const canEdit = hasRole('Admin', 'Registrar', 'Treasurer') && !isLocked;
 
   const load = () => {
     if (!schoolYear) return; // wait for backend-provided current SY
@@ -182,9 +191,11 @@ export default function Students({ onMenuClick }) {
             </button>
           )}
         </div>
-        <select value={schoolYear || ''} onChange={e => setSchoolYear(e.target.value)} className="bg-white border border-brand-border rounded-lg px-2 py-1.5 text-sm text-brand-navy focus:outline-none focus:border-brand-steel" title="School Year">
-          {schoolYears.map(sy => <option key={sy} value={sy}>{sy}</option>)}
-        </select>
+        {showDropdown && (
+          <select value={schoolYear || ''} onChange={e => setSchoolYear(e.target.value)} className="bg-white border border-brand-border rounded-lg px-2 py-1.5 text-sm text-brand-navy focus:outline-none focus:border-brand-steel" title="School Year">
+            {schoolYears.map(sy => <option key={sy} value={sy}>{sy}{lockedYears.includes(sy) ? ' 🔒' : ''}</option>)}
+          </select>
+        )}
         <select value={filterGrade} onChange={e => setFilterGrade(e.target.value)} className="bg-white border border-brand-border rounded-lg px-2 py-1.5 text-sm text-brand-navy focus:outline-none focus:border-brand-steel">
           <option value="">All Grade Levels</option>
           {gradeLevels.map(g => <option key={g} value={g}>{g}</option>)}
@@ -211,6 +222,7 @@ export default function Students({ onMenuClick }) {
       </TopBar>
 
       <div className="p-6">
+        {isLocked && <LockedYearBanner schoolYear={schoolYear} />}
         {(hasActiveFilters || search) && (
           <p className="text-xs text-brand-slate mb-2">Showing {filtered.length} of {students.length} students</p>
         )}

@@ -12,6 +12,7 @@ const {
   getPayStatus,
 } = require('../utils/studentBalance');
 const { requireRole } = require('../middleware/role');
+const { assertCanModifyYear } = require('../utils/schoolYearLock');
 
 // Multer setup for photo uploads
 const multer = require('multer');
@@ -148,6 +149,12 @@ router.post('/', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
       return res.status(400).json({ error: 'student_id, first_name, last_name, and grade_level are required' });
     }
 
+    // Can't register a new student into a locked school year
+    if (school_year) {
+      const lockErr = assertCanModifyYear(req, school_year);
+      if (lockErr) return res.status(403).json({ error: lockErr });
+    }
+
     const existing = db.prepare('SELECT id FROM students WHERE student_id = ?').get(student_id);
     if (existing) return res.status(409).json({ error: 'Student ID already exists' });
 
@@ -169,6 +176,16 @@ router.post('/bulk-enroll', requireRole('Admin', 'Registrar', 'Treasurer'), (req
     const { studentIds } = req.body;
     if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
       return res.status(400).json({ error: 'studentIds array is required' });
+    }
+
+    // Block if ANY of the students is in a locked school year
+    const locked = db.prepare(`
+      SELECT student_id, school_year FROM students
+      WHERE student_id IN (${studentIds.map(() => '?').join(',')})
+    `).all(...studentIds);
+    for (const s of locked) {
+      const lockErr = assertCanModifyYear(req, s.school_year);
+      if (lockErr) return res.status(403).json({ error: `${lockErr} (student ${s.student_id})` });
     }
 
     const results = [];
@@ -194,9 +211,15 @@ router.post('/bulk-enroll', requireRole('Admin', 'Registrar', 'Treasurer'), (req
 // POST /api/students/:studentId/enroll — Enroll a single student
 router.post('/:studentId/enroll', requireRole('Admin', 'Registrar', 'Treasurer'), (req, res) => {
   try {
+    const student = db.prepare('SELECT school_year FROM students WHERE student_id = ?').get(req.params.studentId);
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    const lockErr = assertCanModifyYear(req, student.school_year);
+    if (lockErr) return res.status(403).json({ error: lockErr });
+
     const result = db.transaction(() => enrollStudent(req.params.studentId, db))();
-    const student = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
-    res.json({ ...student, enrolled: true, tuitionCount: result.tuitionCount, otherFeesCount: result.otherFeesCount });
+    const updated = db.prepare('SELECT * FROM students WHERE student_id = ?').get(req.params.studentId);
+    res.json({ ...updated, enrolled: true, tuitionCount: result.tuitionCount, otherFeesCount: result.otherFeesCount });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -245,6 +268,9 @@ router.post('/:studentId/drop', requireRole('Admin', 'Registrar', 'Treasurer'), 
     if (student.status !== 'Enrolled' && student.status !== 'LOA') {
       return res.status(400).json({ error: `Cannot drop student with status "${student.status}"` });
     }
+
+    const lockErr = assertCanModifyYear(req, student.school_year);
+    if (lockErr) return res.status(403).json({ error: lockErr });
 
     const sy = student.school_year;
     const dropDate = new Date(dropped_date);
@@ -297,6 +323,9 @@ router.post('/:studentId/re-enroll', requireRole('Admin', 'Registrar', 'Treasure
     if (student.status !== 'Dropped') {
       return res.status(400).json({ error: `Cannot re-enroll student with status "${student.status}"` });
     }
+
+    const lockErr = assertCanModifyYear(req, student.school_year);
+    if (lockErr) return res.status(403).json({ error: lockErr });
 
     db.prepare(`UPDATE students SET status = 'Enrolled', dropped_date = NULL WHERE student_id = ?`)
       .run(req.params.studentId);

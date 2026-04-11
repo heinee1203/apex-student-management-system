@@ -16,6 +16,7 @@ import SOAPrintBatchPage from './pages/SOAPrintBatchPage';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Users from './pages/Users';
+import EndOfYear from './pages/EndOfYear';
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -62,6 +63,11 @@ export default function App() {
                   <Route path="/payments" element={<Payments onMenuClick={() => setSidebarOpen(true)} />} />
                   <Route path="/soa" element={<StatementOfAccount onMenuClick={() => setSidebarOpen(true)} />} />
                   <Route path="/reports" element={<Reports onMenuClick={() => setSidebarOpen(true)} />} />
+                  <Route path="/end-of-year" element={
+                    hasRole('Admin')
+                      ? <EndOfYear onMenuClick={() => setSidebarOpen(true)} />
+                      : <Navigate to="/" replace />
+                  } />
                   <Route path="/settings" element={
                     hasRole('Admin') ? (
                       <PinGate unlocked={settingsUnlocked} setUnlocked={setSettingsUnlocked}>

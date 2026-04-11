@@ -6,6 +6,7 @@ import { useToast } from '../components/Toast';
 import { api } from '../utils/api';
 import { formatCurrency, formatDate } from '../utils/format';
 import { useSchoolYear } from '../utils/useSchoolYear';
+import LockedYearBanner from '../components/LockedYearBanner';
 import { useAuth } from '../context/AuthContext';
 
 const GRADE_LEVELS = ['Nursery 1', 'Nursery 2', 'Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
@@ -21,12 +22,21 @@ export default function Fees({ onMenuClick }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const { selectedSY: currentSY, setSelectedSY: setCurrentSY, availableYears: schoolYears } = useSchoolYear();
+  const {
+    selectedSY: currentSY,
+    setSelectedSY: setCurrentSY,
+    availableYears: schoolYears,
+    showDropdown,
+    lockedYears,
+  } = useSchoolYear();
   const [form, setForm] = useState({ student_id: '', fee_type: 'Tuition Fee', payment_term: '', installment_number: '', school_year: '', amount: '', due_date: '', description: '' });
   const [assignTo, setAssignTo] = useState('student');
   const [gradeLevel, setGradeLevel] = useState('');
   const addToast = useToast();
   const { hasRole } = useAuth();
+  // isFilterLocked — whether the currently selected filter year is locked.
+  // Fees has its own filterSY state (can be "" for All). We compute
+  // isLocked against the filter, not the hook's selectedSY.
   const canEdit = hasRole('Admin', 'Registrar', 'Treasurer');
 
   // Filters
@@ -47,6 +57,12 @@ export default function Fees({ onMenuClick }) {
 
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // Is the currently-selected filter year a locked year? When true we
+  // hide Add/Edit/Delete buttons and show a read-only banner. The
+  // backend also enforces lock on writes — this is UX polish only.
+  const filterIsLocked = !!(filterSY && lockedYears.includes(filterSY));
+  const canWrite = canEdit && !filterIsLocked;
 
   const gradeCount = assignTo === 'grade' && gradeLevel ? students.filter(s => s.grade_level === gradeLevel && s.status === 'Enrolled' && s.school_year === form.school_year).length : 0;
 
@@ -306,10 +322,11 @@ export default function Fees({ onMenuClick }) {
     <div>
       <TopBar title="Fees & Obligations" onMenuClick={onMenuClick}>
         <button onClick={exportCSV} className="bg-white border border-brand-border hover:bg-brand-light text-brand-navy px-3 py-1.5 rounded-lg text-sm font-medium">Export CSV</button>
-        {canEdit && <button onClick={() => { setEditing(null); setAssignTo('student'); setGradeLevel(''); setForm({ student_id: '', fee_type: feeTypesList[0] || 'Tuition Fee', payment_term: '', installment_number: '', school_year: currentSY || '', amount: '', due_date: '', description: '' }); setModalOpen(true); }} className="bg-brand-steel hover:bg-brand-teal text-white px-4 py-1.5 rounded-lg text-sm font-medium">+ Add Fee</button>}
+        {canWrite && <button onClick={() => { setEditing(null); setAssignTo('student'); setGradeLevel(''); setForm({ student_id: '', fee_type: feeTypesList[0] || 'Tuition Fee', payment_term: '', installment_number: '', school_year: currentSY || '', amount: '', due_date: '', description: '' }); setModalOpen(true); }} className="bg-brand-steel hover:bg-brand-teal text-white px-4 py-1.5 rounded-lg text-sm font-medium">+ Add Fee</button>}
       </TopBar>
 
       <div className="p-6 space-y-4">
+        {filterIsLocked && <LockedYearBanner schoolYear={filterSY} />}
         {/* Summary Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white border border-brand-border border-l-4 border-l-brand-steel rounded-xl p-4 shadow-sm">
@@ -352,10 +369,12 @@ export default function Fees({ onMenuClick }) {
             <option value="Unpaid">Unpaid</option>
             <option value="Overdue">Overdue</option>
           </select>
-          <select value={filterSY} onChange={e => setFilterSY(e.target.value)} className={selectClass}>
-            <option value="">All Years</option>
-            {schoolYears.map(sy => <option key={sy} value={sy}>{sy}</option>)}
-          </select>
+          {showDropdown && (
+            <select value={filterSY} onChange={e => setFilterSY(e.target.value)} className={selectClass}>
+              <option value="">All Years</option>
+              {schoolYears.map(sy => <option key={sy} value={sy}>{sy}{lockedYears.includes(sy) ? ' 🔒' : ''}</option>)}
+            </select>
+          )}
           <div className="relative">
             <input
               type="text"
@@ -465,7 +484,7 @@ export default function Fees({ onMenuClick }) {
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusColor}`}>{o.effectiveStatus}</span>
                       </td>
                       <td className="px-4 py-2">
-                        {canEdit && <div className="flex gap-1">
+                        {canEdit && !lockedYears.includes(o.school_year) && <div className="flex gap-1">
                           <button onClick={() => { setEditing(o.id); setForm({ student_id: o.student_id, fee_type: o.fee_type, payment_term: o.payment_term || '', installment_number: o.installment_number || '', school_year: o.school_year, amount: o.amount, due_date: o.due_date || '', description: o.description || '' }); setModalOpen(true); }} title="Edit" className="text-brand-slate hover:text-status-warning p-1">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                           </button>
