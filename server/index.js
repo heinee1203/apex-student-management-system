@@ -158,6 +158,144 @@ catch {
   `);
 }
 
+// ============================================================
+// SUMMER PROGRAM MODULE — tables for summer classes, tutorials,
+// enrollments, payments (with FIFO allocation), and attendance.
+// All tables prefixed summer_ to keep them isolated from the
+// regular school year schema. Additive only — no existing tables
+// are touched.
+// ============================================================
+{
+  // Idempotent: CREATE TABLE IF NOT EXISTS + try/catch for indexes
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS summer_programs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      school_year TEXT NOT NULL,
+      start_date DATE NOT NULL,
+      end_date DATE NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft',
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CHECK (status IN ('draft','active','closed'))
+    );
+
+    CREATE TABLE IF NOT EXISTS summer_classes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      summer_program_id INTEGER NOT NULL REFERENCES summer_programs(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      class_type TEXT NOT NULL,
+      subject TEXT,
+      grade_level_min TEXT,
+      grade_level_max TEXT,
+      fee DECIMAL(10,2) NOT NULL DEFAULT 0,
+      capacity INTEGER NOT NULL DEFAULT 0,
+      schedule_days TEXT,
+      schedule_time TEXT,
+      start_date DATE,
+      end_date DATE,
+      teacher_id INTEGER,
+      teacher_name TEXT,
+      room TEXT,
+      notes TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CHECK (class_type IN ('class','tutorial')),
+      CHECK (status IN ('open','closed','cancelled'))
+    );
+
+    CREATE TABLE IF NOT EXISTS summer_enrollments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      summer_class_id INTEGER NOT NULL REFERENCES summer_classes(id) ON DELETE RESTRICT,
+      student_id TEXT REFERENCES students(id),
+      is_external INTEGER NOT NULL DEFAULT 0,
+      external_full_name TEXT,
+      external_grade_level TEXT,
+      external_parent_name TEXT,
+      external_parent_contact TEXT,
+      fee_at_enrollment DECIMAL(10,2) NOT NULL,
+      discount DECIMAL(10,2) NOT NULL DEFAULT 0,
+      discount_reason TEXT,
+      total_due DECIMAL(10,2) NOT NULL,
+      total_paid DECIMAL(10,2) NOT NULL DEFAULT 0,
+      balance DECIMAL(10,2) NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      enrolled_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      enrolled_by TEXT REFERENCES users(id),
+      withdrawn_at TEXT,
+      withdrawn_reason TEXT,
+      notes TEXT,
+      CHECK (
+        (student_id IS NOT NULL AND is_external = 0)
+        OR
+        (student_id IS NULL AND is_external = 1 AND external_full_name IS NOT NULL)
+      ),
+      CHECK (status IN ('active','withdrawn','completed'))
+    );
+
+    CREATE TABLE IF NOT EXISTS summer_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      or_number TEXT UNIQUE,
+      student_id TEXT REFERENCES students(id),
+      is_external INTEGER NOT NULL DEFAULT 0,
+      external_full_name TEXT,
+      amount DECIMAL(10,2) NOT NULL CHECK (amount > 0),
+      payment_method TEXT NOT NULL,
+      reference_no TEXT,
+      paid_at DATE NOT NULL,
+      received_by TEXT REFERENCES users(id),
+      remarks TEXT,
+      voided INTEGER NOT NULL DEFAULT 0,
+      voided_at TEXT,
+      voided_by TEXT REFERENCES users(id),
+      void_reason TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CHECK (payment_method IN ('cash','gcash','bank_transfer','check')),
+      CHECK (
+        (student_id IS NOT NULL AND is_external = 0)
+        OR
+        (student_id IS NULL AND is_external = 1 AND external_full_name IS NOT NULL)
+      )
+    );
+
+    CREATE TABLE IF NOT EXISTS summer_payment_allocations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      summer_payment_id INTEGER NOT NULL REFERENCES summer_payments(id) ON DELETE CASCADE,
+      summer_enrollment_id INTEGER NOT NULL REFERENCES summer_enrollments(id) ON DELETE RESTRICT,
+      amount_allocated DECIMAL(10,2) NOT NULL CHECK (amount_allocated > 0),
+      allocated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS summer_attendance (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      summer_enrollment_id INTEGER NOT NULL REFERENCES summer_enrollments(id) ON DELETE CASCADE,
+      session_date DATE NOT NULL,
+      status TEXT NOT NULL,
+      remarks TEXT,
+      recorded_by TEXT REFERENCES users(id),
+      recorded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(summer_enrollment_id, session_date),
+      CHECK (status IN ('present','absent','late','excused'))
+    );
+  `);
+  // Indexes — wrapped in try/catch because CREATE INDEX IF NOT EXISTS
+  // isn't supported in all SQLite versions for the same statement.
+  const indexes = [
+    'CREATE INDEX IF NOT EXISTS idx_summer_classes_program ON summer_classes(summer_program_id)',
+    'CREATE INDEX IF NOT EXISTS idx_summer_enrollments_class ON summer_enrollments(summer_class_id)',
+    'CREATE INDEX IF NOT EXISTS idx_summer_enrollments_student ON summer_enrollments(student_id)',
+    'CREATE INDEX IF NOT EXISTS idx_summer_enrollments_status ON summer_enrollments(status)',
+    'CREATE INDEX IF NOT EXISTS idx_summer_alloc_payment ON summer_payment_allocations(summer_payment_id)',
+    'CREATE INDEX IF NOT EXISTS idx_summer_alloc_enrollment ON summer_payment_allocations(summer_enrollment_id)',
+    'CREATE INDEX IF NOT EXISTS idx_summer_attendance_date ON summer_attendance(session_date)',
+  ];
+  for (const sql of indexes) {
+    try { db.exec(sql); } catch { /* index already exists */ }
+  }
+}
+
 // One-time fix: correct school year from 2024-2025 to 2025-2026
 {
   const wrongSY = db.prepare("SELECT COUNT(*) as count FROM obligations WHERE school_year = '2024-2025'").get();
@@ -294,6 +432,10 @@ app.use('/api/soa', authenticate, require('./routes/soa'));
 app.use('/api/tuition-schedule', authenticate, require('./routes/tuitionSchedule'));
 app.use('/api/fee-types', authenticate, require('./routes/feeTypes'));
 app.use('/api/default-fees', authenticate, require('./routes/defaultFees'));
+
+// Summer Program module — all authenticated users can read, writes are
+// role-gated per-route inside summer.js via requireRole().
+app.use('/api/summer', authenticate, require('./routes/summer'));
 
 // Admin-only routes
 app.use('/api/settings', authenticate, requireRole('Admin'), require('./routes/settings'));

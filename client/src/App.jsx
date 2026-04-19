@@ -17,6 +17,8 @@ import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Users from './pages/Users';
 import EndOfYear from './pages/EndOfYear';
+import SummerLanding from './features/summer/pages/SummerLanding';
+import SummerProgramDetail from './features/summer/pages/SummerProgramDetail';
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -63,6 +65,8 @@ export default function App() {
                   <Route path="/payments" element={<Payments onMenuClick={() => setSidebarOpen(true)} />} />
                   <Route path="/soa" element={<StatementOfAccount onMenuClick={() => setSidebarOpen(true)} />} />
                   <Route path="/reports" element={<Reports onMenuClick={() => setSidebarOpen(true)} />} />
+                  <Route path="/summer" element={<SummerLanding onMenuClick={() => setSidebarOpen(true)} />} />
+                  <Route path="/summer/programs/:id" element={<SummerProgramDetail onMenuClick={() => setSidebarOpen(true)} />} />
                   <Route path="/end-of-year" element={
                     hasRole('Admin')
                       ? <EndOfYear onMenuClick={() => setSidebarOpen(true)} />
