@@ -23,6 +23,22 @@ function generateSummerOR(paidAt) {
   return `SOR-${dateStr}-${String(count + 1).padStart(3, '0')}`;
 }
 
+// Admin-only: wipe ALL summer data (test cleanup). Deletes in FK order.
+router.post('/cleanup', requireRole('Admin'), (req, res) => {
+  try {
+    if (req.body?.confirm !== 'WIPE') return res.status(400).json({ error: 'Send { confirm: "WIPE" }' });
+    db.transaction(() => {
+      db.exec('DELETE FROM summer_attendance');
+      db.exec('DELETE FROM summer_payment_allocations');
+      db.exec('DELETE FROM summer_payments');
+      db.exec('DELETE FROM summer_enrollments');
+      db.exec('DELETE FROM summer_classes');
+      db.exec('DELETE FROM summer_programs');
+    })();
+    res.json({ message: 'All summer data wiped' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // §4.1 PROGRAMS
 // ═══════════════════════════════════════════════════════════════════════════
