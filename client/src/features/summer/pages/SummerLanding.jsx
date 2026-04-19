@@ -23,8 +23,12 @@ export default function SummerLanding({ onMenuClick }) {
   };
   useEffect(() => { load(); }, []);
 
+  const [submitting, setSubmitting] = useState(false);
+
   const handleCreate = async (e) => {
     e.preventDefault();
+    if (submitting) return; // prevent double-click
+    setSubmitting(true);
     try {
       const created = await summerApi.createProgram(form);
       addToast(`Program "${created.name}" created`);
@@ -32,12 +36,21 @@ export default function SummerLanding({ onMenuClick }) {
       setForm({ name: '', school_year: '2025-2026', start_date: '', end_date: '' });
       load();
     } catch (err) { addToast(err.message, 'error'); }
+    finally { setSubmitting(false); }
   };
 
   const handleStatusChange = async (id, newStatus) => {
     try {
       await summerApi.updateProgram(id, { status: newStatus });
       addToast(`Program ${newStatus}`);
+      load();
+    } catch (err) { addToast(err.message, 'error'); }
+  };
+
+  const handleDeleteProgram = async (id) => {
+    try {
+      await summerApi.deleteProgram(id);
+      addToast('Program deleted');
       load();
     } catch (err) { addToast(err.message, 'error'); }
   };
@@ -167,6 +180,11 @@ export default function SummerLanding({ onMenuClick }) {
                               Activate
                             </button>
                           )}
+                          {isAdmin && (p.class_count || 0) === 0 && (
+                            <button onClick={() => handleDeleteProgram(p.id)} className="text-status-danger hover:text-status-danger/80 text-xs underline ml-2">
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -201,7 +219,9 @@ export default function SummerLanding({ onMenuClick }) {
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setFormOpen(false)} className="px-4 py-2 text-sm text-brand-navy bg-brand-light hover:bg-brand-border rounded-lg">Cancel</button>
-            <button type="submit" className="px-4 py-2 text-sm text-white bg-brand-steel hover:bg-brand-teal rounded-lg">Create Program</button>
+            <button type="submit" disabled={submitting} className="px-4 py-2 text-sm text-white bg-brand-steel hover:bg-brand-teal rounded-lg disabled:opacity-50">
+              {submitting ? 'Creating…' : 'Create Program'}
+            </button>
           </div>
         </form>
       </Modal>
